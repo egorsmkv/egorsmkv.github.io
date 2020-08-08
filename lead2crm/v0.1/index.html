@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+
+    <title>LEAD2CRM</title>
+
+    <meta name="description" content="Пересылка лидов из контактых форм в CRM-системы.">
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/4.5.2/css/bootstrap.min.css">
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/photoswipe/4.1.3/photoswipe.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/photoswipe/4.1.3/default-skin/default-skin.min.css">
+
+</head>
+<body>
+
+<div class="container mt-3">
+
+    <h1>
+        LEAD2CRM v0.1
+    </h1>
+
+    <h2 class="text-muted">
+        Пересылка лидов в CRM-системы
+    </h2>
+
+    <hr>
+
+    <div class="text-center">
+        <a href="#" data-toggle="modal" data-target="#orderFormModal" class="btn btn-lg btn-success">
+            Купить &mdash; $200
+        </a>
+        <button id="screenshots" class="btn btn-lg btn-warning">
+            Скриншоты
+        </button>
+        <a href="./docs.html" class="btn btn-lg btn-primary">
+            Документация
+        </a>
+        <a href="mailto:yehors@ukr.net" class="btn btn-lg btn-info">
+            Поддержка: yehors@ukr.net
+        </a>
+    </div>
+
+    <hr>
+
+    <h3>Что это такое?</h3>
+
+    <div class="alert alert-info">
+        <b>LEAD2CRM</b> &mdash; это комплексное программное решение с помощью которого Вы можете
+        автоматизировать сбор, пересылку, попутный вызов CALLBACK-звонков для лидов с собственных сайтов в различные CRM-системы/Мессенджеры/E-Mail.
+    </div>
+
+    <br>
+    <br>
+
+    <h3>Поддерживаемое ПО и сервисы</h3>
+
+    <h4>CRM-системы</h4>
+
+    <ul>
+        <li>
+            Битрикс24
+        </li>
+        <li>
+            AmoCRM
+        </li>
+        <li>
+            retailCRM
+        </li>
+        <li>
+            Hubspot
+        </li>
+        <li>
+            OneBox
+        </li>
+    </ul>
+
+    <h4>Мессенджеры</h4>
+
+    <ul>
+        <li>
+            Telegram
+        </li>
+    </ul>
+
+    <h5>Системы аналитики</h5>
+
+    <ul>
+        <li>
+            Roistat
+        </li>
+        <li>
+            Ringostat
+        </li>
+    </ul>
+
+    <h5>Другое</h5>
+
+    <ul>
+        <li>
+            PushAll
+        </li>
+    </ul>
+
+    <br>
+    <br>
+
+    <hr>
+    <br>
+    <br>
+
+    <div class="text-center">
+        Автор: <b>Егор Смоляков</b>
+        <br>
+        E-mail: <a href="mailto:yehors@ukr.net">yehors@ukr.net</a>
+    </div>
+
+    <br>
+    <br>
+    <br>
+    <br>
+
+</div>
+
+<div class="modal fade" id="orderFormModal" data-backdrop="static" data-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="staticBackdropLabel">Купить LEAD2CRM</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+
+                <form>
+                    <div class="form-group">
+                        <label for="name-field" class="col-form-label">Ваше имя:</label>
+                        <input type="text" class="form-control" id="name-field">
+                    </div>
+                    <div class="form-group">
+                        <label for="email-field" class="col-form-label">Почта:</label>
+                        <input type="email" class="form-control" id="email-field">
+                        <span class="text-muted">
+                            <small>
+                                На этот адрес будет отправлена ссылка на оплату ПО, а после оплаты и архив с кодом LEAD2CRM
+                            </small>
+                        </span>
+                    </div>
+                    <div class="form-group form-check">
+                        <input type="checkbox" class="form-check-input" id="install-config-field">
+                        <label class="form-check-label" for="install-config-field">Дополнительная услуга "Установка и Настройка" &mdash; $50</label>
+                    </div>
+                </form>
+
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-success">Отправить</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Root element of PhotoSwipe. Must have class pswp. -->
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    <!-- Background of PhotoSwipe.
+         It's a separate element as animating opacity is faster than rgba(). -->
+    <div class="pswp__bg"></div>
+
+    <!-- Slides wrapper with overflow:hidden. -->
+    <div class="pswp__scroll-wrap">
+
+        <!-- Container that holds slides.
+            PhotoSwipe keeps only 3 of them in the DOM to save memory.
+            Don't modify these 3 pswp__item elements, data is added later on. -->
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        <!-- Default (PhotoSwipeUI_Default) interface on top of sliding area. Can be changed. -->
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                <!--  Controls are self-explanatory. Order can be changed. -->
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                <!-- Preloader demo http://codepen.io/dimsemenov/pen/yyBWoR -->
+                <!-- element will get class pswp__preloader--active when preloader is running -->
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/4.5.2/js/bootstrap.bundle.min.js"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/photoswipe/4.1.3/photoswipe.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/photoswipe/4.1.3/photoswipe-ui-default.min.js"></script>
+
+<script>
+
+    var openPhotoSwipe = function () {
+
+        var pswpElement = document.querySelectorAll('.pswp')[0];
+
+        // build items array
+        var items = [
+            {
+                src: 'https://placekitten.com/1200/1000',
+                w: 1200,
+                h: 1000
+            },
+            {
+                src: 'https://placekitten.com/1201/1000',
+                w: 1201,
+                h: 1000
+            },
+            {
+                src: 'https://placekitten.com/1202/1000',
+                w: 1202,
+                h: 1000
+            },
+            {
+                src: 'https://placekitten.com/1203/1000',
+                w: 1203,
+                h: 1000
+            }
+        ];
+
+        // define options (if needed)
+        var options = {
+            // optionName: 'option value'
+            // for example:
+            index: 0 // start at first slide
+        };
+
+        // Initializes and opens PhotoSwipe
+        var gallery = new PhotoSwipe(pswpElement, PhotoSwipeUI_Default, items, options);
+        gallery.init();
+
+    };
+
+    document.getElementById('screenshots').onclick = openPhotoSwipe;
+
+</script>
+
+</body>
+</html>
