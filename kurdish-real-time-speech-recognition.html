@@ -1,0 +1,239 @@
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Real Time Speech Recognition</title>
+    <link
+      rel="stylesheet"
+      href="https://maxcdn.bootstrapcdn.com/font-awesome/4.4.0/css/font-awesome.min.css"
+    />
+    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@ricky0123/vad/dist/index.js"></script>
+    <script src="https://cdn.socket.io/4.5.3/socket.io.min.js"></script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@300&display=swap" rel="stylesheet">
+
+    <script type="module">
+      import { interpolateInferno } from "https://cdn.skypack.dev/d3-scale-chromatic@3"
+
+      const loading = setInterval(() => {
+        const indicator = document.getElementById("indicator")
+        const [message, ...dots] = indicator.innerHTML.split(".")
+        indicator.innerHTML = message + ".".repeat((dots.length + 1) % 7)
+      }, 200)
+
+      try {
+        const myvad = await vad.MicVAD.new({
+          positiveSpeechThreshold: 0.8,
+          minSpeechFrames: 5,
+          onFrameProcessed: (probs) => {
+            const indicatorColor = interpolateInferno(probs.isSpeech / 2)
+            document.body.style.setProperty("--indicator-color", indicatorColor)
+          },
+          onSpeechEnd: (arr) => {
+            const wavBuffer = vad.encodeWAV(arr)
+            const base64 = vad.arrayBufferToBase64(wavBuffer)
+
+            const socket = new WebSocket("ws://138.68.94.192:8777");
+
+            socket.addEventListener("open", () => {
+              // Send the data to the WebSocket server
+              socket.send(base64);
+            });
+
+            socket.addEventListener("message", ({ data }) => {
+              
+              const jsonData = JSON.parse(data);
+
+              console.log('WS server data:');
+              console.log(jsonData);
+              
+              if (!jsonData['error']) {
+
+                const url = `data:audio/wav;base64,${base64}`
+                const el = addAudio(jsonData['text'], url)
+                const speechList = document.getElementById("playlist")
+                speechList.prepend(el)
+
+              }
+            });
+
+          },
+        })
+
+        clearInterval(loading)
+        window.toggleVad = () => {
+          if (myvad.listening === false) {
+            myvad.start()
+            document.getElementById("toggle_vad_button").textContent =
+              "STOP"
+            document.getElementById("indicator").textContent = "Voice Activity Detector is running"
+          } else {
+            myvad.pause()
+            document.getElementById("toggle_vad_button").textContent =
+              "START"
+            document.getElementById(
+              "indicator"
+            ).innerHTML = `Voice Activity Detector is <span style="color:red">stopped</span>`
+            const indicatorColor = interpolateInferno(0)
+            document.body.style.setProperty("--indicator-color", indicatorColor)
+          }
+        }
+        window.toggleVad()
+        document.getElementById("toggle_vad_button").disabled = false
+      } catch (e) {
+        console.error("Failed:", e)
+        clearInterval(loading)
+        document.getElementById(
+          "indicator"
+        ).innerHTML = `<span style="color:red">Voice Activity Detection failed to load</span>`
+      }
+
+      function addAudio(transcript, audioUrl) {
+        
+        console.log('Found speech:');
+        console.log(transcript);
+
+        const entry = document.createElement("div")
+        
+        const transcriptElement = document.createElement("div")
+        transcriptElement.setAttribute('class', 'my-transcript');
+        transcriptElement.textContent = transcript
+
+        const audio = document.createElement("audio")
+        audio.controls = true
+        audio.src = audioUrl
+        entry.classList.add("newItem")
+        
+        const endElement = document.createElement("p")
+        endElement.setAttribute('style', 'margin-top: 5px');
+
+        entry.appendChild(audio)
+        entry.appendChild(transcriptElement)
+        entry.appendChild(endElement)
+
+        return entry
+      }
+    </script>
+  </head>
+  <style>
+    html {
+      box-sizing: border-box;
+    }
+    *,
+    *::after,
+    *::before {
+      box-sizing: inherit;
+    }
+    body {
+      --indicator-color: black;
+      background: radial-gradient(black 55%, var(--indicator-color));
+      min-height: 100vh;
+      color: white;
+      margin: 0;
+    }
+    h1 {
+      font-weight: bold;
+      color: #fff;
+      font-size: 16pt;
+    }
+    .content {
+      padding-inline: 20px;
+      margin-inline: auto;
+      padding-top: 20px;
+    }
+    @media (min-width: 1250px) {
+      .content {
+        padding-top: 100px;
+        width: 800px;
+        padding-inline: 0;
+      }
+    }
+
+    .newItem {
+      margin-bottom: 10px;
+    }
+
+    #playlist {
+      max-height: 600px;
+      overflow-y: scroll;
+      list-style: none;
+      padding-left: 0;
+    }
+    #playlist div:hover {
+      background-color: rgba(100, 100, 100, 0.33);
+    }
+    #playlist div:first-child {
+      border-left: 2px blue solid;
+    }
+    #playlist div {
+      /* max-height: 0; */
+      /* opacity: 0; */
+      /* animation: grow 1s ease-in-out forwards; */
+      padding-left: 5px;
+      /* padding-bottom: 10px; */
+    }
+    button {
+      background-color: black;
+      border: white 1px solid;
+      color: white;
+    }
+    button:hover {
+      color: red;
+      border-color: red;
+    }
+    @keyframes grow {
+      to {
+        max-height: 100px;
+        opacity: 1;
+      }
+    }
+    .control-row {
+      display: flex;
+      justify-content: space-between;
+    }
+    .header {
+      display: flex;
+      justify-content: flex-end;
+    }
+    .github-icon {
+      color: white;
+      text-decoration: none;
+    }
+    .github-icon:hover {
+      color: red;
+      text-decoration: none;
+    }
+    .my-transcript {
+      font-size: 20px;
+      font-family: 'Noto Sans Arabic', sans-serif;
+      margin: 20px;
+    }
+  </style>
+  <body>
+    <div class="content-container">
+      <div class="content">
+        <h1>Real Time Speech Recognition</h1>
+        <div class="control-row">
+          <div id="indicator">
+            Voice Activity Detector is <span style="color: red">LOADING</span>
+          </div>
+          <button id="toggle_vad_button" onclick="window.toggleVad()" disabled>
+            START
+          </button>
+        </div>
+
+        <br>
+        <br>
+
+        <div id="playlist" reversed></div>
+      </div>
+    </div>
+  </body>
+</html>
+
