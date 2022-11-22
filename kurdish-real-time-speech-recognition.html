@@ -39,7 +39,7 @@
             const wavBuffer = vad.encodeWAV(arr)
             const base64 = vad.arrayBufferToBase64(wavBuffer)
 
-            const socket = new WebSocket("ws://138.68.94.192:8777");
+            const socket = new WebSocket("wss://real-time-kurdish.yehors.com");
 
             socket.addEventListener("open", () => {
               // Send the data to the WebSocket server
