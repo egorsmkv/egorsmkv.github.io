@@ -10,8 +10,10 @@
       rel="stylesheet"
       href="https://maxcdn.bootstrapcdn.com/font-awesome/4.4.0/css/font-awesome.min.css"
     />
+    
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@ricky0123/vad/dist/index.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@ricky0123/vad/dist/index.browser.js"></script>
+
     <script src="https://cdn.socket.io/4.5.3/socket.io.min.js"></script>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -19,13 +21,17 @@
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@300&display=swap" rel="stylesheet">
 
     <script type="module">
-      import { interpolateInferno } from "https://cdn.skypack.dev/d3-scale-chromatic@3"
+      console.log('Started');
+
+      import { interpolateInferno } from "https://cdn.skypack.dev/d3-scale-chromatic@3";
 
       const loading = setInterval(() => {
-        const indicator = document.getElementById("indicator")
-        const [message, ...dots] = indicator.innerHTML.split(".")
+        const indicator = document.getElementById("indicator");
+
+        const [message, ...dots] = indicator.innerHTML.split(".");
+        
         indicator.innerHTML = message + ".".repeat((dots.length + 1) % 7)
-      }, 200)
+      }, 200);
 
       try {
         const myvad = await vad.MicVAD.new({
@@ -36,8 +42,8 @@
             document.body.style.setProperty("--indicator-color", indicatorColor)
           },
           onSpeechEnd: (arr) => {
-            const wavBuffer = vad.encodeWAV(arr)
-            const base64 = vad.arrayBufferToBase64(wavBuffer)
+            const wavBuffer = vad.utils.encodeWAV(arr)
+            const base64 = vad.utils.arrayBufferToBase64(wavBuffer)
 
             const socket = new WebSocket("wss://real-time-kurdish.yehors.com");
 
@@ -66,25 +72,34 @@
           },
         })
 
-        clearInterval(loading)
+        clearInterval(loading);
+        
         window.toggleVad = () => {
           if (myvad.listening === false) {
-            myvad.start()
+            
+            myvad.start();
+
             document.getElementById("toggle_vad_button").textContent =
               "STOP"
             document.getElementById("indicator").textContent = "Voice Activity Detector is running"
           } else {
-            myvad.pause()
+            
+            myvad.pause();
+
             document.getElementById("toggle_vad_button").textContent =
               "START"
             document.getElementById(
               "indicator"
             ).innerHTML = `Voice Activity Detector is <span style="color:red">stopped</span>`
+            
             const indicatorColor = interpolateInferno(0)
+            
             document.body.style.setProperty("--indicator-color", indicatorColor)
           }
         }
-        window.toggleVad()
+
+        window.toggleVad();
+        
         document.getElementById("toggle_vad_button").disabled = false
       } catch (e) {
         console.error("Failed:", e)
