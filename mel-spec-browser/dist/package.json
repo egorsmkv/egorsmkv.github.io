@@ -1,0 +1,16 @@
+{
+  "name": "mel_spec_audio",
+  "description": "Audio-to-Mel pipeline",
+  "version": "0.2.2",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wavey-ai/mel-spec"
+  },
+  "files": [
+    "mel_spec_audio_bg.wasm",
+    "mel_spec_audio.js",
+    "LICENSE-MIT"
+  ],
+  "browser": "mel_spec_audio.js"
+}
