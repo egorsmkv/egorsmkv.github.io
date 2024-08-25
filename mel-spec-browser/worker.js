@@ -1,5 +1,5 @@
-importScripts("./dist/mel_spec_pipeline.js");
-importScripts("./ringbuffer.js");
+importScripts("./dist/mel_spec_pipeline.min.js");
+importScripts("./ringbuffer.min.js");
 
 const { SpeechToMel } = wasm_bindgen;
 

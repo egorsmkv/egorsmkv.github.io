@@ -1,5 +1,5 @@
 importScripts("./dist/mel_spec_audio.js");
-importScripts("./ringbuffer.js");
+importScripts("./ringbuffer.min.js");
 
 const { WavToPcm } = wasm_bindgen_wav;
 

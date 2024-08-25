@@ -289,6 +289,8 @@ function startUi() {
 
     // Perform an asynchronous POST request to localhost:9000
     try {
+
+      /*
       const response = await fetch("http://localhost:9000", {
         method: "POST",
         body: tga.buffer,
@@ -300,6 +302,10 @@ function startUi() {
       } else {
         spanElement.textContent = "Error: Unable to fetch data.";
       }
+      */
+
+      spanElement.textContent = 'not implemented yet';
+
     } catch (error) {
       spanElement.textContent = "Error: " + error.message;
     }
