@@ -5,6 +5,52 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Loguru Viewer</title>
     <style>
+        :root {
+            --bg-primary: #f9fafb;
+            --bg-secondary: #ffffff;
+            --bg-tertiary: #f8fafc;
+            --bg-gray-50: #f9fafb;
+            --bg-gray-100: #f3f4f6;
+            --bg-gray-200: #e5e7eb;
+            --text-primary: #1f2937;
+            --text-secondary: #374151;
+            --text-tertiary: #4b5563;
+            --text-muted: #6b7280;
+            --border-color: #d1d5db;
+            --border-light: #e5e7eb;
+            --border-card: #e2e8f0;
+            --hover-bg: #f7fafc;
+            --drop-zone-border: #cbd5e0;
+            --drop-zone-hover-bg: #ebf8ff;
+            --drop-zone-hover-border: #4299e1;
+            --stat-card-bg: #f8fafc;
+            --modal-bg: #ffffff;
+            --shadow-color: rgba(0, 0, 0, 0.1);
+        }
+
+        [data-theme="dark"] {
+            --bg-primary: #111827;
+            --bg-secondary: #1f2937;
+            --bg-tertiary: #1f2937;
+            --bg-gray-50: #111827;
+            --bg-gray-100: #1f2937;
+            --bg-gray-200: #374151;
+            --text-primary: #f9fafb;
+            --text-secondary: #e5e7eb;
+            --text-tertiary: #d1d5db;
+            --text-muted: #9ca3af;
+            --border-color: #4b5563;
+            --border-light: #374151;
+            --border-card: #4b5563;
+            --hover-bg: #374151;
+            --drop-zone-border: #4b5563;
+            --drop-zone-hover-bg: #1e3a5f;
+            --drop-zone-hover-border: #3b82f6;
+            --stat-card-bg: #1f2937;
+            --modal-bg: #1f2937;
+            --shadow-color: rgba(0, 0, 0, 0.3);
+        }
+
         * {
             margin: 0;
             padding: 0;
@@ -12,8 +58,9 @@
         }
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
-            background-color: #f9fafb;
+            background-color: var(--bg-primary);
             min-height: 100vh;
+            transition: background-color 0.3s ease;
         }
         .container { max-width: 1280px; margin: 0 auto; padding: 0 1rem; }
         .py-8 { padding-top: 2rem; padding-bottom: 2rem; }
@@ -33,15 +80,15 @@
         .text-2xl { font-size: 1.5rem; line-height: 2rem; }
         .font-bold { font-weight: 700; }
         .font-semibold { font-weight: 600; }
-        .text-gray-800 { color: #1f2937; }
-        .text-gray-700 { color: #374151; }
-        .text-gray-600 { color: #4b5563; }
-        .text-gray-500 { color: #6b7280; }
+        .text-gray-800 { color: var(--text-primary); }
+        .text-gray-700 { color: var(--text-secondary); }
+        .text-gray-600 { color: var(--text-tertiary); }
+        .text-gray-500 { color: var(--text-muted); }
         .text-white { color: #ffffff; }
-        .bg-white { background-color: #ffffff; }
-        .bg-gray-50 { background-color: #f9fafb; }
-        .bg-gray-100 { background-color: #f3f4f6; }
-        .bg-gray-200 { background-color: #e5e7eb; }
+        .bg-white { background-color: var(--bg-secondary); }
+        .bg-gray-50 { background-color: var(--bg-gray-50); }
+        .bg-gray-100 { background-color: var(--bg-gray-100); }
+        .bg-gray-200 { background-color: var(--bg-gray-200); }
         .bg-red-500 { background-color: #ef4444; }
         .bg-green-500 { background-color: #10b981; }
         .hover\:bg-red-600:hover { background-color: #dc2626; }
@@ -56,7 +103,7 @@
         .py-2 { padding-top: 0.5rem; padding-bottom: 0.5rem; }
         .py-0\.5 { padding-top: 0.125rem; padding-bottom: 0.125rem; }
         .px-2 { padding-left: 0.5rem; padding-right: 0.5rem; }
-        .shadow { box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1); }
+        .shadow { box-shadow: 0 1px 3px 0 var(--shadow-color), 0 1px 2px -1px var(--shadow-color); }
         .text-center { text-align: center; }
         .flex { display: flex; }
         .flex-wrap { flex-wrap: wrap; }
@@ -78,10 +125,10 @@
         .border { border-width: 1px; }
         .border-b { border-bottom-width: 1px; }
         .border-b-2 { border-bottom-width: 2px; }
-        .border-gray-300 { border-color: #d1d5db; }
-        .border-gray-200 { border-color: #e5e7eb; }
+        .border-gray-300 { border-color: var(--border-color); }
+        .border-gray-200 { border-color: var(--border-light); }
         .divide-y > * + * { border-top-width: 1px; }
-        .divide-gray-200 > * + * { border-color: #e5e7eb; }
+        .divide-gray-200 > * + * { border-color: var(--border-light); }
         .uppercase { text-transform: uppercase; }
         .tracking-wider { letter-spacing: 0.05em; }
         table { border-collapse: collapse; width: 100%; }
@@ -109,49 +156,85 @@
     </style>
     <style>
         .drop-zone {
-            border: 3px dashed #cbd5e0;
+            border: 3px dashed var(--drop-zone-border);
             transition: all 0.3s ease;
         }
         .drop-zone.drag-over {
-            border-color: #4299e1;
-            background-color: #ebf8ff;
+            border-color: var(--drop-zone-hover-border);
+            background-color: var(--drop-zone-hover-bg);
         }
         .log-row {
             transition: background-color 0.2s ease;
         }
         .log-row:hover {
-            background-color: #f7fafc;
+            background-color: var(--hover-bg);
         }
+        /* Default (light mode) log level colors */
         .level-DEBUG { color: #805ad5; }
         .level-INFO { color: #3182ce; }
         .level-WARNING { color: #d69e2e; }
         .level-ERROR { color: #e53e3e; }
         .level-CRITICAL { color: #c53030; }
         .level-SUCCESS { color: #38a169; }
+        
+        /* Dark mode log level colors */
+        [data-theme="dark"] .level-DEBUG { color: #a78bfa; }
+        [data-theme="dark"] .level-INFO { color: #60a5fa; }
+        [data-theme="dark"] .level-WARNING { color: #fbbf24; }
+        [data-theme="dark"] .level-ERROR { color: #f87171; }
+        [data-theme="dark"] .level-CRITICAL { color: #ef4444; }
+        [data-theme="dark"] .level-SUCCESS { color: #4ade80; }
         .stats-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
             gap: 1rem;
         }
         .stat-card {
-            background-color: #f8fafc;
-            border: 1px solid #e2e8f0;
+            background-color: var(--stat-card-bg);
+            border: 1px solid var(--border-card);
             border-radius: 0.75rem;
             padding: 1rem;
+            transition: background-color 0.3s ease, border-color 0.3s ease;
         }
         .stat-label {
             font-size: 0.875rem;
-            color: #6b7280;
+            color: var(--text-muted);
             margin-bottom: 0.25rem;
         }
         .stat-value {
             font-size: 1.125rem;
             font-weight: 700;
-            color: #111827;
+            color: var(--text-primary);
+        }
+        .theme-toggle {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            z-index: 100;
+            background-color: var(--bg-secondary);
+            border: 2px solid var(--border-color);
+            border-radius: 9999px;
+            padding: 0.5rem 1rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            box-shadow: 0 4px 6px var(--shadow-color);
+            transition: all 0.3s ease;
+            font-size: 1.25rem;
+        }
+        .theme-toggle:hover {
+            transform: scale(1.05);
+            box-shadow: 0 6px 8px var(--shadow-color);
         }
     </style>
 </head>
 <body class="bg-gray-50 min-h-screen">
+    <!-- Theme Toggle Button -->
+    <button id="themeToggle" class="theme-toggle" aria-label="Toggle dark mode">
+        <span id="themeIcon">🌙</span>
+    </button>
+
     <div class="container mx-auto px-4 py-8">
         <!-- Header -->
         <div class="mb-8">
@@ -305,6 +388,38 @@
     </div>
 
     <script>
+        // Theme Management
+        const themeToggle = document.getElementById('themeToggle');
+        const themeIcon = document.getElementById('themeIcon');
+        
+        // Check for saved theme preference or default to 'light'
+        let currentTheme = 'light';
+        try {
+            currentTheme = localStorage.getItem('theme') || 'light';
+        } catch (e) {
+            console.warn('localStorage is not available, using default theme:', e);
+        }
+        document.documentElement.setAttribute('data-theme', currentTheme);
+        updateThemeIcon(currentTheme);
+
+        function updateThemeIcon(theme) {
+            themeIcon.textContent = theme === 'dark' ? '☀️' : '🌙';
+        }
+
+        themeToggle.addEventListener('click', () => {
+            const currentTheme = document.documentElement.getAttribute('data-theme');
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            
+            document.documentElement.setAttribute('data-theme', newTheme);
+            try {
+                localStorage.setItem('theme', newTheme);
+            } catch (e) {
+                console.warn('Could not save theme preference to localStorage:', e);
+            }
+            updateThemeIcon(newTheme);
+        });
+
+        // Log Viewer Variables
         let allLogs = [];
         let filteredLogs = [];
         let currentFilter = 'ALL';
@@ -767,13 +882,13 @@
             const modal = document.createElement('div');
             modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50';
             modal.innerHTML = `
-                <div class="bg-white rounded-lg max-w-4xl w-full max-h-[80vh] overflow-hidden">
-                    <div class="p-4 border-b flex justify-between items-center">
-                        <h3 class="text-lg font-semibold">Log Details</h3>
-                        <button class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+                <div class="rounded-lg max-w-4xl w-full max-h-[80vh] overflow-hidden" style="background-color: var(--modal-bg);">
+                    <div class="p-4 border-b flex justify-between items-center" style="border-color: var(--border-light);">
+                        <h3 class="text-lg font-semibold" style="color: var(--text-primary);">Log Details</h3>
+                        <button class="text-2xl" style="color: var(--text-muted);">&times;</button>
                     </div>
                     <div class="p-4 overflow-auto max-h-[calc(80vh-60px)]">
-                        <pre class="bg-gray-50 p-4 rounded text-sm overflow-x-auto">${escapeHtml(details)}</pre>
+                        <pre class="p-4 rounded text-sm overflow-x-auto" style="background-color: var(--bg-gray-100); color: var(--text-primary);">${escapeHtml(details)}</pre>
                     </div>
                 </div>
             `;
@@ -837,14 +952,15 @@
             .filter-btn {
                 padding: 0.5rem 1rem;
                 border-radius: 0.5rem;
-                background-color: #f7fafc;
-                border: 2px solid #e2e8f0;
+                background-color: var(--bg-tertiary);
+                border: 2px solid var(--border-card);
                 transition: all 0.2s ease;
                 cursor: pointer;
+                color: var(--text-secondary);
             }
             .filter-btn:hover {
-                background-color: #edf2f7;
-                border-color: #cbd5e0;
+                background-color: var(--hover-bg);
+                border-color: var(--border-color);
             }
             .filter-btn.active {
                 background-color: #4299e1;
@@ -854,6 +970,9 @@
             .filter-btn.active .count {
                 background-color: rgba(255, 255, 255, 0.3);
                 color: white;
+            }
+            .filter-btn .count {
+                color: var(--text-tertiary);
             }
         `;
         document.head.appendChild(style);
