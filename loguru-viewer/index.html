@@ -487,6 +487,22 @@
             <input type="file" id="fileInput" accept=".json,.jsonl,.txt,.log" class="hidden">
         </div>
 
+        <!-- Load From URL -->
+        <div class="bg-white rounded-lg p-6 mb-6 shadow">
+            <div class="mb-3">
+                <p class="text-lg font-semibold text-gray-800">🌐 Load From URL</p>
+                <p class="text-sm text-gray-500">Fetch JSONL or text logs directly from a link (CORS enabled).</p>
+            </div>
+            <div class="flex flex-wrap gap-2">
+                <input type="text" id="urlInput" placeholder="https://example.com/logs/latest.jsonl" 
+                    class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" style="min-width: 220px;">
+                <button id="loadUrlBtn" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition whitespace-nowrap">
+                    Fetch &amp; Load
+                </button>
+            </div>
+            <p id="urlStatus" class="text-xs text-gray-500 mt-2">Direct link must allow cross-origin access.</p>
+        </div>
+
         <!-- Paste Logs -->
         <div class="bg-white rounded-lg p-6 mb-6 shadow">
             <div class="flex items-center justify-between mb-3">
@@ -708,6 +724,9 @@
         const dropZone = document.getElementById('dropZone');
         const fileInput = document.getElementById('fileInput');
         const fileInfo = document.getElementById('fileInfo');
+        const urlInput = document.getElementById('urlInput');
+        const loadUrlBtn = document.getElementById('loadUrlBtn');
+        const urlStatus = document.getElementById('urlStatus');
         const filterSection = document.getElementById('filterSection');
         const logTableContainer = document.getElementById('logTableContainer');
         const logTableBody = document.getElementById('logTableBody');
@@ -767,6 +786,15 @@
             if (file) handleFile(file);
         });
 
+        // Load from URL
+        loadUrlBtn.addEventListener('click', () => loadFromUrl());
+        urlInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                loadFromUrl();
+            }
+        });
+
         // Paste logs
         loadPasteBtn.addEventListener('click', () => loadPastedLogs());
         pasteInput.addEventListener('keydown', (e) => {
@@ -785,6 +813,9 @@
             fileInput.value = '';
             searchInput.value = '';
             pasteInput.value = '';
+            urlInput.value = '';
+            setUrlStatus('Direct link must allow cross-origin access.', false);
+            setUrlLoading(false);
             fileInfo.classList.add('hidden');
             filterSection.classList.add('hidden');
             logTableContainer.classList.add('hidden');
@@ -884,6 +915,54 @@
             };
             
             reader.readAsText(file);
+        }
+
+        function setUrlStatus(message, isError = false) {
+            if (!urlStatus) return;
+            urlStatus.textContent = message;
+            urlStatus.style.color = isError ? '#e53e3e' : 'var(--text-muted)';
+        }
+
+        function setUrlLoading(isLoading) {
+            if (!loadUrlBtn) return;
+            loadUrlBtn.disabled = isLoading;
+            loadUrlBtn.textContent = isLoading ? 'Fetching...' : 'Fetch & Load';
+            loadUrlBtn.style.opacity = isLoading ? '0.7' : '1';
+            loadUrlBtn.style.cursor = isLoading ? 'not-allowed' : 'pointer';
+        }
+
+        async function loadFromUrl() {
+            const url = (urlInput?.value || '').trim();
+            if (!url) {
+                showError('Please enter a URL to fetch.');
+                setUrlStatus('Provide a direct link to your log file.', true);
+                return;
+            }
+
+            setUrlLoading(true);
+            setUrlStatus('Fetching log file...', false);
+
+            try {
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`Request failed with status ${response.status}`);
+                }
+
+                const content = await response.text();
+                if (!content.trim()) {
+                    throw new Error('Response was empty');
+                }
+
+                const result = parseContent(content);
+                showLoadedState(url);
+                addHistoryEntry(url, content, result?.logsCount);
+                setUrlStatus(`Loaded ${result?.logsCount || allLogs.length} lines from URL.`);
+            } catch (error) {
+                setUrlStatus(`Failed to load: ${error.message}`, true);
+                showError('Error loading from URL: ' + error.message);
+            } finally {
+                setUrlLoading(false);
+            }
         }
         
         function loadPastedLogs() {
