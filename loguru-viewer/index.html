@@ -112,10 +112,12 @@
         .items-center { align-items: center; }
         .justify-between { justify-content: space-between; }
         .gap-3 { gap: 0.75rem; }
+        .gap-2 { gap: 0.5rem; }
         .gap-4 { gap: 1rem; }
         .gap-6 { gap: 1.5rem; }
         .hidden { display: none; }
         .w-full { width: 100%; }
+        .max-w-3xl { max-width: 48rem; }
         .max-w-4xl { max-width: 56rem; }
         .max-h-\[80vh\] { max-height: 80vh; }
         .overflow-hidden { overflow: hidden; }
@@ -227,6 +229,58 @@
             transform: scale(1.05);
             box-shadow: 0 6px 8px var(--shadow-color);
         }
+        .history-badge {
+            background-color: #3b82f6;
+            color: white;
+            border-radius: 9999px;
+            padding: 0.1rem 0.5rem;
+            font-size: 0.75rem;
+            font-weight: 700;
+            margin-left: 0.5rem;
+        }
+        .modal-btn {
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            border: 1px solid var(--border-light);
+            background-color: var(--bg-tertiary);
+            color: var(--text-secondary);
+            transition: all 0.2s ease;
+        }
+        .modal-btn:hover {
+            background-color: var(--hover-bg);
+            border-color: var(--border-color);
+        }
+        .modal-btn-primary {
+            background-color: #3182ce;
+            border-color: #3182ce;
+            color: #ffffff;
+        }
+        .modal-btn-primary:hover {
+            background-color: #2563eb;
+            border-color: #2563eb;
+            color: #ffffff;
+        }
+        .modal-btn-danger {
+            background-color: #ef4444;
+            border-color: #ef4444;
+            color: #ffffff;
+        }
+        .modal-btn-danger:hover {
+            background-color: #dc2626;
+            border-color: #dc2626;
+            color: #ffffff;
+        }
+        .modal-icon-btn {
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.375rem;
+            background-color: transparent;
+            color: var(--text-muted);
+            transition: all 0.2s ease;
+        }
+        .modal-icon-btn:hover {
+            color: var(--text-primary);
+            background-color: var(--hover-bg);
+        }
     </style>
 </head>
 <body class="bg-gray-50 min-h-screen">
@@ -237,9 +291,14 @@
 
     <div class="container mx-auto px-4 py-8">
         <!-- Header -->
-        <div class="mb-8">
-            <h1 class="text-4xl font-bold text-gray-800 mb-2">🤖 Loguru Viewer</h1>
-            <p class="text-gray-600">Drag and drop a JSONL or text log file to view and filter logs</p>
+        <div class="mb-8 flex flex-wrap items-center justify-between gap-4">
+            <div>
+                <h1 class="text-4xl font-bold text-gray-800 mb-2">🤖 Loguru Viewer</h1>
+                <p class="text-gray-600">Drag and drop a JSONL or text log file to view and filter logs</p>
+            </div>
+            <button id="historyBtn" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-lg transition flex items-center gap-2">
+                🕑 History <span id="historyCount" class="history-badge hidden">0</span>
+            </button>
         </div>
 
         <!-- Drop Zone -->
@@ -341,6 +400,9 @@
             <div class="flex items-center gap-4">
                 <input type="text" id="searchInput" placeholder="Search logs..." 
                     class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <button id="sortToggle" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-lg transition whitespace-nowrap">
+                    Sort by Time: Newest ↓
+                </button>
                 <button id="exportBtn" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg transition">
                     Export Filtered
                 </button>
@@ -383,6 +445,25 @@
             </div>
             <div id="noResults" class="hidden p-8 text-center text-gray-500">
                 <p class="text-lg">No logs match the current filter</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- History Modal -->
+    <div id="historyModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center p-4 z-50 flex">
+        <div class="rounded-lg max-w-3xl w-full overflow-hidden shadow" style="background-color: var(--modal-bg); border: 1px solid var(--border-light);">
+            <div class="p-4 border-b flex justify-between items-center" style="border-color: var(--border-light);">
+                <div>
+                    <h3 class="text-lg font-semibold" style="color: var(--text-primary);">Saved Log Sessions</h3>
+                    <p class="text-sm" style="color: var(--text-muted);">Click an entry to reload logs saved from uploads or pastes.</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button id="clearHistoryBtn" class="modal-btn modal-btn-danger text-sm">Clear</button>
+                    <button id="closeHistoryBtn" class="modal-icon-btn text-2xl">&times;</button>
+                </div>
+            </div>
+            <div id="historyList" class="p-4 overflow-auto" style="color: var(--text-primary); max-height: 70vh;">
+                <p class="text-sm" style="color: var(--text-muted);">No saved sessions yet. Open a log file or paste logs to save them here.</p>
             </div>
         </div>
     </div>
@@ -443,6 +524,7 @@
         const statAvgGap = document.getElementById('statAvgGap');
         const clearBtn = document.getElementById('clearBtn');
         const searchInput = document.getElementById('searchInput');
+        const sortToggle = document.getElementById('sortToggle');
         const exportBtn = document.getElementById('exportBtn');
         const copyModeToggle = document.getElementById('copyModeToggle');
         const copyPanel = document.getElementById('copyPanel');
@@ -450,7 +532,17 @@
         const closeCopyMode = document.getElementById('closeCopyMode');
         const pasteInput = document.getElementById('pasteInput');
         const loadPasteBtn = document.getElementById('loadPasteBtn');
+        const historyBtn = document.getElementById('historyBtn');
+        const historyModal = document.getElementById('historyModal');
+        const historyList = document.getElementById('historyList');
+        const closeHistoryBtn = document.getElementById('closeHistoryBtn');
+        const clearHistoryBtn = document.getElementById('clearHistoryBtn');
+        const historyCount = document.getElementById('historyCount');
+        const HISTORY_KEY = 'logViewerHistory';
+        const HISTORY_LIMIT = 15;
+        let historyEntries = loadHistoryFromStorage();
         let copyModeEnabled = false;
+        let sortDirection = 'desc';
 
         // Drag and drop handlers
         dropZone.addEventListener('click', () => fileInput.click());
@@ -508,6 +600,14 @@
             applyFilters();
         });
 
+        // Sort toggle
+        updateSortToggleLabel();
+        sortToggle.addEventListener('click', () => {
+            sortDirection = sortDirection === 'desc' ? 'asc' : 'desc';
+            updateSortToggleLabel();
+            applyFilters();
+        });
+
         // Export button
         exportBtn.addEventListener('click', () => {
             const data = filteredLogs.map(log => JSON.stringify(log)).join('\n');
@@ -541,6 +641,25 @@
                 applyFilters();
             });
         });
+        
+        // History modal
+        updateHistoryBadge();
+        historyBtn.addEventListener('click', () => {
+            renderHistoryList();
+            historyModal.classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+        });
+        closeHistoryBtn.addEventListener('click', closeHistoryModal);
+        historyModal.addEventListener('click', (e) => {
+            if (e.target === historyModal) {
+                closeHistoryModal();
+            }
+        });
+        clearHistoryBtn.addEventListener('click', () => {
+            historyEntries = [];
+            persistHistory();
+            renderHistoryList();
+        });
 
         function showLoadedState(label) {
             fileName.textContent = label;
@@ -555,8 +674,9 @@
             
             reader.onload = (e) => {
                 try {
-                    parseContent(e.target.result);
+                    const result = parseContent(e.target.result);
                     showLoadedState(file.name);
+                    addHistoryEntry(file.name, e.target.result, result?.logsCount);
                 } catch (error) {
                     showError('Error parsing log file: ' + error.message);
                 }
@@ -572,8 +692,9 @@
                 return;
             }
             try {
-                parseContent(content);
+                const result = parseContent(content);
                 showLoadedState('Pasted logs');
+                addHistoryEntry('Pasted logs', content, result?.logsCount);
             } catch (error) {
                 showError('Error parsing pasted logs: ' + error.message);
             }
@@ -592,6 +713,107 @@
                 errorDiv.remove();
             });
             dropZone.parentElement.insertBefore(errorDiv, dropZone);
+        }
+
+        function loadHistoryFromStorage() {
+            try {
+                const raw = localStorage.getItem(HISTORY_KEY);
+                if (!raw) return [];
+                const parsed = JSON.parse(raw);
+                return Array.isArray(parsed) ? parsed : [];
+            } catch (e) {
+                console.warn('Could not read history from localStorage:', e);
+                return [];
+            }
+        }
+
+        function persistHistory() {
+            try {
+                localStorage.setItem(HISTORY_KEY, JSON.stringify(historyEntries.slice(0, HISTORY_LIMIT)));
+            } catch (e) {
+                console.warn('Could not save history to localStorage:', e);
+            }
+            updateHistoryBadge();
+        }
+
+        function updateHistoryBadge() {
+            if (historyEntries.length) {
+                historyCount.textContent = historyEntries.length;
+                historyCount.classList.remove('hidden');
+            } else {
+                historyCount.classList.add('hidden');
+            }
+        }
+
+        function addHistoryEntry(label, content, logsCount) {
+            if (!content) return;
+            const entry = {
+                id: `${Date.now()}-${Math.random().toString(16).slice(2, 6)}`,
+                label: label || 'Saved logs',
+                savedAt: new Date().toISOString(),
+                logsCount: Number.isFinite(logsCount) ? logsCount : allLogs.length,
+                content
+            };
+            historyEntries = [entry, ...historyEntries].slice(0, HISTORY_LIMIT);
+            persistHistory();
+        }
+
+        function renderHistoryList() {
+            if (!historyEntries.length) {
+                historyList.innerHTML = `<p class="text-sm" style="color: var(--text-muted);">No saved sessions yet. Open a log file or paste logs to save them here.</p>`;
+                return;
+            }
+            historyList.innerHTML = '';
+            historyEntries.forEach((entry) => {
+                const item = document.createElement('div');
+                item.className = 'p-3 mb-2 rounded border border-gray-200 hover:border-gray-300 transition flex items-center justify-between gap-3';
+                item.style.backgroundColor = 'var(--bg-secondary)';
+                item.style.borderColor = 'var(--border-light)';
+
+                const meta = document.createElement('div');
+                meta.innerHTML = `
+                    <p class="font-semibold" style="color: var(--text-primary);">${escapeHtml(entry.label)}</p>
+                    <p class="text-sm" style="color: var(--text-muted);">${formatSavedDate(entry.savedAt)} · ${entry.logsCount || 0} log lines</p>
+                `;
+
+                const loadBtn = document.createElement('button');
+                loadBtn.className = 'modal-btn modal-btn-primary text-sm';
+                loadBtn.textContent = 'Load';
+                loadBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    loadHistoryEntry(entry);
+                });
+
+                item.addEventListener('click', () => loadHistoryEntry(entry));
+                item.appendChild(meta);
+                item.appendChild(loadBtn);
+                historyList.appendChild(item);
+            });
+        }
+
+        function loadHistoryEntry(entry) {
+            closeHistoryModal();
+            try {
+                parseContent(entry.content);
+                showLoadedState(entry.label || 'Saved logs');
+                // Move the used entry to the top for recency
+                historyEntries = [entry, ...historyEntries.filter((e) => e.id !== entry.id)];
+                persistHistory();
+            } catch (error) {
+                showError('Error loading saved logs: ' + error.message);
+            }
+        }
+
+        function closeHistoryModal() {
+            historyModal.classList.add('hidden');
+            document.body.style.overflow = '';
+        }
+
+        function formatSavedDate(isoString) {
+            const d = new Date(isoString);
+            if (isNaN(d.getTime())) return 'Unknown date';
+            const pad = (n) => n.toString().padStart(2, '0');
+            return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
         }
 
         function parseContent(content) {
@@ -616,6 +838,7 @@
             }
             updateFilterCounts();
             applyFilters();
+            return { logsCount: allLogs.length };
         }
 
         function parseDurationToSeconds(text) {
@@ -649,6 +872,29 @@
             return Number.isNaN(fallback) ? null : fallback;
         }
 
+        function sortLogsByTime(logs) {
+            if (!Array.isArray(logs) || !logs.length) return [];
+            const decorated = logs.map((log, index) => ({
+                log,
+                index,
+                ts: getTimestampMs(log)
+            }));
+
+            decorated.sort((a, b) => {
+                const aHas = Number.isFinite(a.ts);
+                const bHas = Number.isFinite(b.ts);
+
+                if (aHas && bHas) {
+                    return sortDirection === 'asc' ? a.ts - b.ts : b.ts - a.ts;
+                }
+                if (aHas && !bHas) return -1;
+                if (!aHas && bHas) return 1;
+                return a.index - b.index;
+            });
+
+            return decorated.map(item => item.log);
+        }
+
         function formatDuration(seconds) {
             if (!Number.isFinite(seconds)) return 'N/A';
             const totalSeconds = Math.max(0, seconds);
@@ -668,6 +914,13 @@
             const pad = (n) => n.toString().padStart(2, '0');
             return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ` +
                    `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+        }
+
+        function updateSortToggleLabel() {
+            if (!sortToggle) return;
+            sortToggle.textContent = sortDirection === 'desc'
+                ? 'Sort by Time: Newest ↓'
+                : 'Sort by Time: Oldest ↑';
         }
 
         function updateExecutionStats() {
@@ -824,6 +1077,7 @@
                 return true;
             });
             
+            filteredLogs = sortLogsByTime(filteredLogs);
             renderTable();
             updateExecutionStats();
             if (copyModeEnabled) {
