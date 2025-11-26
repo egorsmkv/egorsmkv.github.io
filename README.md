@@ -1,2 +1,2 @@
-# egorsmkv.github.io
-Some experiments
+- Loguru Viewer: https://egorsmkv.github.io/loguru-viewer/
+
