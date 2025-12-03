@@ -1,2 +1,2 @@
 - Loguru Viewer: https://egorsmkv.github.io/loguru-viewer/
-
+- MCP Inspector: https://egorsmkv.github.io/mcp-inspector/
