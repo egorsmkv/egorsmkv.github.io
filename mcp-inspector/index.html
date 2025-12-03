@@ -1,0 +1,1117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MCP Inspector</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+        }
+    </script>
+    
+    <!-- Babel for JSX (Standalone) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        /* Custom scrollbar for dark theme */
+        .dark ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        .dark ::-webkit-scrollbar-track {
+            background: #0f172a; 
+        }
+        .dark ::-webkit-scrollbar-thumb {
+            background: #334155; 
+            border-radius: 4px;
+        }
+        .dark ::-webkit-scrollbar-thumb:hover {
+            background: #475569; 
+        }
+
+        /* Custom scrollbar for light theme */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8; 
+        }
+    </style>
+</head>
+<body class="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 overflow-hidden transition-colors duration-200">
+    <div id="root"></div>
+
+    <script type="text/babel" data-type="module">
+        // Import React and libraries via ESM for better compatibility
+        import React, { useState, useEffect, useRef, useCallback } from 'https://esm.sh/react@18.2.0?dev';
+        import { createRoot } from 'https://esm.sh/react-dom@18.2.0/client?dev';
+        import * as LucideReact from 'https://esm.sh/lucide-react@0.263.1';
+
+        // Destructure icons from the imported module
+        const { 
+            Terminal, Play, Box, FileText, MessageSquare, Settings, Activity, 
+            AlertCircle, X, ChevronRight, ChevronDown, Trash2, Database, Search, 
+            CheckCircle2, Wifi, WifiOff, Send, Globe, Sun, Moon
+        } = LucideReact;
+
+        // Simple ID generator for JSON-RPC
+        const generateId = () => Math.random().toString(36).substring(2, 9);
+
+        // --- McpClient Logic (Converted to JS Class) ---
+        class McpClient {
+            constructor(url, logFn) {
+                this.url = url;
+                this.mode = 'sse';
+                this.eventSource = null;
+                this.endpoint = null;
+                this.pendingRequests = new Map();
+                this.onOpen = null;
+                this.onError = null;
+                this.log = logFn;
+                
+                // Cache for HTTP mode
+                this.httpTools = [];
+                this.httpBaseUrl = '';
+            }
+
+            async connect() {
+                this.log('system', `Attempting to detect connection type for: ${this.url}`);
+                
+                // STRATEGY 1: Check for HTTP JSON Tool Directory (Simple Mode)
+                try {
+                    const controller = new AbortController();
+                    const id = setTimeout(() => controller.abort(), 3000); // 3s timeout for discovery
+                    
+                    const response = await fetch(this.url, { 
+                        method: 'GET',
+                        headers: { 'Accept': 'application/json' },
+                        signal: controller.signal
+                    });
+                    clearTimeout(id);
+
+                    const contentType = response.headers.get('content-type');
+                    
+                    if (response.ok && contentType && contentType.includes('application/json')) {
+                        const data = await response.json();
+                        // Heuristic: Does it look like the list_tools format provided?
+                        if (data.tools && Array.isArray(data.tools) && data.tools.length > 0 && data.tools[0].endpoint) {
+                            this.mode = 'http';
+                            this.httpTools = data.tools;
+                            // Determine base URL for tools
+                            try {
+                                const urlObj = new URL(this.url);
+                                this.httpBaseUrl = urlObj.origin; 
+                            } catch {
+                                this.httpBaseUrl = '';
+                            }
+                            this.log('system', 'Detected HTTP Tool Directory. Switching to HTTP Mode.');
+                            if (this.onOpen) this.onOpen();
+                            return 'http';
+                        }
+                    }
+                } catch (e) {
+                    // Ignore errors here, proceed to SSE strategy
+                }
+
+                // STRATEGY 2: Standard SSE (MCP Default)
+                this.mode = 'sse';
+                return new Promise((resolve, reject) => {
+                    try {
+                        const eventSource = new EventSource(this.url);
+                        this.eventSource = eventSource;
+
+                        eventSource.onopen = () => {
+                            if (this.onOpen) this.onOpen();
+                        };
+
+                        eventSource.onerror = (err) => {
+                            if (this.onError) this.onError(err);
+                            if (!this.endpoint) {
+                                reject(new Error('Failed to connect to SSE endpoint'));
+                            }
+                            eventSource.close();
+                        };
+
+                        eventSource.addEventListener('endpoint', (event) => {
+                            this.endpoint = event.data;
+                            this.log('system', `Received POST endpoint: ${this.endpoint}`);
+                            
+                            try {
+                                new URL(this.endpoint);
+                            } catch {
+                                const baseUrl = new URL(this.url);
+                                const path = baseUrl.pathname.substring(0, baseUrl.pathname.lastIndexOf('/') + 1);
+                                this.endpoint = new URL(this.endpoint, baseUrl.origin + path).toString();
+                            }
+                            
+                            resolve('sse');
+                        });
+
+                        eventSource.addEventListener('message', (event) => {
+                            this.handleMessage(event.data);
+                        });
+
+                    } catch (e) {
+                        reject(e);
+                    }
+                });
+            }
+
+            handleMessage(data) {
+                try {
+                    const json = JSON.parse(data);
+                    this.log('incoming', json);
+
+                    if (json.id && this.pendingRequests.has(json.id)) {
+                        const { resolve, reject } = this.pendingRequests.get(json.id);
+                        if (json.error) {
+                            reject(json.error);
+                        } else {
+                            resolve(json.result);
+                        }
+                        this.pendingRequests.delete(json.id);
+                    }
+                } catch (e) {
+                    this.log('error', 'Failed to parse incoming message: ' + data);
+                }
+            }
+
+            async sendRequest(method, params = {}) {
+                // === HTTP MODE HANDLER ===
+                if (this.mode === 'http') {
+                    if (method === 'tools/list') {
+                        return { tools: this.httpTools };
+                    }
+                    
+                    if (method === 'tools/call') {
+                        const tool = this.httpTools.find(t => t.name === params.name);
+                        if (!tool) throw new Error(`Tool ${params.name} not found`);
+                        
+                        // Construct Target URL
+                        let targetUrl = tool.endpoint;
+                        if (!targetUrl.startsWith('http')) {
+                            targetUrl = this.httpBaseUrl + targetUrl;
+                        }
+
+                        this.log('outgoing', { type: 'HTTP_FETCH', url: targetUrl, method: tool.method, params: params.arguments });
+
+                        const fetchOptions = {
+                            method: tool.method || 'GET',
+                            headers: {}
+                        };
+
+                        // Handle Arguments
+                        if (params.arguments) {
+                            if (tool.method === 'POST') {
+                                fetchOptions.headers['Content-Type'] = 'application/json';
+                                fetchOptions.body = JSON.stringify(params.arguments);
+                            } else {
+                                // Assume GET -> Query Params
+                                const urlObj = new URL(targetUrl);
+                                Object.keys(params.arguments).forEach(key => 
+                                    urlObj.searchParams.append(key, params.arguments[key])
+                                );
+                                targetUrl = urlObj.toString();
+                            }
+                        }
+
+                        const response = await fetch(targetUrl, fetchOptions);
+                        const text = await response.text();
+                        
+                        // Try to parse JSON for better display, otherwise plain text
+                        let displayContent = text;
+                        try {
+                            displayContent = JSON.stringify(JSON.parse(text), null, 2);
+                        } catch {}
+
+                        return {
+                            content: [{ type: 'text', text: displayContent }]
+                        };
+                    }
+
+                    return { [method.split('/')[0]]: [] }; // Return empty for resources/prompts
+                }
+
+                // === SSE/JSON-RPC MODE HANDLER ===
+                if (!this.endpoint) throw new Error('No endpoint available');
+                
+                const id = generateId();
+                const request = {
+                    jsonrpc: '2.0',
+                    id,
+                    method,
+                    params
+                };
+
+                this.log('outgoing', request);
+
+                return new Promise(async (resolve, reject) => {
+                    this.pendingRequests.set(id, { resolve, reject });
+                    
+                    try {
+                        const response = await fetch(this.endpoint, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(request)
+                        });
+
+                        if (!response.ok) {
+                            throw new Error(`HTTP Error: ${response.statusText}`);
+                        }
+
+                    } catch (e) {
+                        this.pendingRequests.delete(id);
+                        reject(e);
+                    }
+                });
+            }
+
+            async sendNotification(method, params = {}) {
+                if (this.mode === 'http') return; // Notifications not supported in HTTP mode
+
+                if (!this.endpoint) throw new Error('No endpoint available');
+                const request = {
+                    jsonrpc: '2.0',
+                    id: generateId(),
+                    method,
+                    params
+                };
+                
+                this.log('outgoing', request);
+                
+                await fetch(this.endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(request)
+                });
+            }
+
+            close() {
+                if (this.eventSource) {
+                    this.eventSource.close();
+                }
+            }
+        }
+
+        // --- Components ---
+
+        function NavButton({ active, onClick, icon, label, count }) {
+            return (
+                <button 
+                onClick={onClick}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-sm mb-1 transition-colors ${
+                    active 
+                    ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-medium' 
+                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200'
+                }`}
+                >
+                <div className="flex items-center space-x-3">
+                    {icon}
+                    <span>{label}</span>
+                </div>
+                {count !== undefined && (
+                    <span className="bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-500 px-1.5 py-0.5 rounded text-xs">
+                    {count}
+                    </span>
+                )}
+                </button>
+            );
+        }
+
+        function StatusBadge({ status, mode }) {
+            const styles = {
+                connected: 'bg-green-100 text-green-700 border-green-200 dark:bg-green-500/20 dark:text-green-400 dark:border-green-500/30',
+                connecting: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-500/20 dark:text-amber-400 dark:border-amber-500/30 animate-pulse',
+                disconnected: 'bg-slate-200 text-slate-600 border-slate-300 dark:bg-slate-700 dark:text-slate-400 dark:border-slate-600',
+                error: 'bg-red-100 text-red-700 border-red-200 dark:bg-red-500/20 dark:text-red-400 dark:border-red-500/30'
+            };
+            
+            return (
+                <div className="flex flex-col items-end gap-1">
+                <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider border ${styles[status]}`}>
+                    {status}
+                </span>
+                {status === 'connected' && (
+                    <span className="text-[9px] text-slate-500 font-mono uppercase">
+                    {mode} mode
+                    </span>
+                )}
+                </div>
+            );
+        }
+
+        function ItemList({ items, selectedId, onSelect, icon, getLabel, getSubLabel }) {
+            if (items.length === 0) {
+                return <div className="p-4 text-center text-xs text-slate-500 italic">No items found</div>;
+            }
+            return (
+                <div>
+                {items.map((item, idx) => {
+                    const active = (item.name || item.uri) === selectedId;
+                    return (
+                    <button
+                        key={idx}
+                        onClick={() => onSelect(item)}
+                        className={`w-full text-left p-3 border-b border-slate-200 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors ${
+                        active ? 'bg-indigo-50 dark:bg-indigo-500/5 border-l-2 border-l-indigo-500' : 'border-l-2 border-l-transparent'
+                        }`}
+                    >
+                        <div className="flex items-center justify-between mb-1">
+                        <span className={`font-medium text-sm truncate pr-2 ${active ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-700 dark:text-slate-300'}`}>
+                            {getLabel(item)}
+                        </span>
+                        {icon}
+                        </div>
+                        <div className="text-xs text-slate-500 truncate">
+                        {getSubLabel(item) || 'No description'}
+                        </div>
+                    </button>
+                    );
+                })}
+                </div>
+            );
+        }
+
+        function LogViewer({ logs, onClear }) {
+            const endRef = useRef(null);
+
+            useEffect(() => {
+                endRef.current?.scrollIntoView({ behavior: 'smooth' });
+            }, [logs]);
+
+            return (
+                <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 transition-colors duration-200">
+                <div className="flex items-center justify-between p-3 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+                    <h3 className="font-mono text-sm text-slate-500 dark:text-slate-400">Terminal Output</h3>
+                    <button onClick={onClear} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded text-slate-500 hover:text-slate-900 dark:hover:text-white">
+                    <Trash2 className="w-4 h-4" />
+                    </button>
+                </div>
+                <div className="flex-1 overflow-y-auto p-4 space-y-3 font-mono text-xs">
+                    {logs.length === 0 && <div className="text-slate-500 dark:text-slate-600 italic">No logs yet...</div>}
+                    {logs.map((log) => (
+                    <div key={log.id} className="flex gap-3 group">
+                        <div className="shrink-0 text-slate-400 dark:text-slate-600 select-none w-16">{log.timestamp}</div>
+                        <div className="flex-1 break-words">
+                            <div className={`flex items-center gap-2 mb-1 font-bold uppercase tracking-wider text-[10px] 
+                            ${log.type === 'incoming' ? 'text-emerald-600 dark:text-emerald-500' : 
+                                log.type === 'outgoing' ? 'text-indigo-600 dark:text-indigo-500' : 
+                                log.type === 'error' ? 'text-red-600 dark:text-red-500' : 'text-slate-500'}`}>
+                            {log.type === 'incoming' && <ChevronDown className="w-3 h-3" />}
+                            {log.type === 'outgoing' && <Send className="w-3 h-3" />}
+                            {log.type === 'error' && <AlertCircle className="w-3 h-3" />}
+                            {log.type}
+                            </div>
+                            <div className={`${log.type === 'error' ? 'text-red-700 dark:text-red-300' : 'text-slate-700 dark:text-slate-300'}`}>
+                            {typeof log.content === 'string' ? log.content : (
+                                <pre className="whitespace-pre-wrap">{JSON.stringify(log.content, null, 2)}</pre>
+                            )}
+                            </div>
+                        </div>
+                    </div>
+                    ))}
+                    <div ref={endRef} />
+                </div>
+                </div>
+            );
+        }
+
+        function ToolExecutor({ tool, onExecute }) {
+            const [args, setArgs] = useState('{\n  \n}');
+            const [result, setResult] = useState(null);
+            const [executing, setExecuting] = useState(false);
+            const [error, setError] = useState(null);
+
+            useEffect(() => {
+                const generateDefault = (schema) => {
+                    if(!schema || !schema.properties) return {};
+                    const obj = {};
+                    for(const [key, val] of Object.entries(schema.properties)) {
+                        if(val.default) obj[key] = val.default;
+                        else obj[key] = val.type === 'string' ? "" : null;
+                    }
+                    return obj;
+                };
+                
+                if (tool.inputSchema) {
+                    setArgs(JSON.stringify(generateDefault(tool.inputSchema), null, 2));
+                } else {
+                    setArgs('{\n  \n}');
+                }
+                
+                setResult(null);
+                setError(null);
+            }, [tool]);
+
+            const handleRun = async () => {
+                setExecuting(true);
+                setError(null);
+                setResult(null);
+                try {
+                    const parsedArgs = JSON.parse(args);
+                    const res = await onExecute(parsedArgs);
+                    setResult(res);
+                } catch (e) {
+                    setError(e.message || 'Error executing tool');
+                } finally {
+                    setExecuting(false);
+                }
+            };
+
+            return (
+                <div className="flex flex-col h-full">
+                <div className="p-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center transition-colors duration-200">
+                    <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Arguments (JSON)</h3>
+                    <button 
+                    onClick={handleRun}
+                    disabled={executing}
+                    className="flex items-center px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded transition-colors disabled:opacity-50"
+                    >
+                    {executing ? <Activity className="w-4 h-4 animate-spin mr-2" /> : <Play className="w-4 h-4 mr-2" />}
+                    Run Tool
+                    </button>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-slate-200 dark:divide-slate-800">
+                    <div className="h-64 md:h-96">
+                        <textarea
+                        value={args}
+                        onChange={(e) => setArgs(e.target.value)}
+                        className="w-full h-full bg-slate-50 dark:bg-slate-950 p-4 font-mono text-sm text-slate-800 dark:text-slate-300 outline-none resize-none focus:bg-white dark:focus:bg-slate-900 transition-colors"
+                        spellCheck={false}
+                        placeholder="// Enter arguments as JSON"
+                        />
+                    </div>
+                    <div className="h-64 md:h-96 bg-white dark:bg-slate-900 p-4 overflow-y-auto transition-colors duration-200">
+                        <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Result</h3>
+                        {executing && <div className="text-slate-500 italic">Running...</div>}
+                        {error && <div className="text-red-600 dark:text-red-400 text-sm p-2 bg-red-100 dark:bg-red-900/20 border border-red-200 dark:border-red-500/20 rounded">{error}</div>}
+                        {result && (
+                        <div className="space-y-4">
+                            {result.content?.map((content, i) => (
+                            <div key={i} className="bg-slate-50 dark:bg-slate-950 rounded p-3 border border-slate-200 dark:border-slate-800">
+                                {content.type === 'text' ? (
+                                    <pre className="whitespace-pre-wrap text-sm text-emerald-700 dark:text-emerald-300 font-mono">{content.text}</pre>
+                                ) : content.type === 'image' ? (
+                                    <div className="flex flex-col items-center">
+                                    <img src={`data:${content.mimeType};base64,${content.data}`} alt="Tool Result" className="max-w-full rounded" />
+                                    </div>
+                                ) : (
+                                    <div className="text-slate-500 text-xs">Unknown content type: {content.type}</div>
+                                )}
+                            </div>
+                            ))}
+                            {result.isError && (
+                            <div className="text-red-600 dark:text-red-400 text-sm font-semibold">Tool execution reported an error.</div>
+                            )}
+                        </div>
+                        )}
+                        {!result && !error && !executing && <div className="text-slate-500 dark:text-slate-600 text-sm italic">Execute tool to see results</div>}
+                    </div>
+                </div>
+                </div>
+            );
+        }
+
+        function ResourceViewer({ resource, onRead }) {
+            const [content, setContent] = useState(null);
+            const [loading, setLoading] = useState(false);
+            const [error, setError] = useState(null);
+
+            useEffect(() => {
+                setContent(null);
+                setError(null);
+            }, [resource]);
+
+            const loadResource = async () => {
+                setLoading(true);
+                setError(null);
+                try {
+                const res = await onRead();
+                setContent(res);
+                } catch (e) {
+                setError(e.message || "Failed to read resource");
+                } finally {
+                setLoading(false);
+                }
+            };
+
+            return (
+                <div className="flex flex-col">
+                <div className="p-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center transition-colors duration-200">
+                    <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Resource Content</h3>
+                    <button 
+                    onClick={loadResource}
+                    disabled={loading}
+                    className="flex items-center px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded transition-colors disabled:opacity-50"
+                    >
+                    {loading ? <Activity className="w-4 h-4 animate-spin mr-2" /> : <Database className="w-4 h-4 mr-2" />}
+                    Read Resource
+                    </button>
+                </div>
+                <div className="p-6 bg-slate-50 dark:bg-slate-950 min-h-[300px] transition-colors duration-200">
+                    {loading && <div className="text-slate-500 italic">Reading resource stream...</div>}
+                    {error && <div className="text-red-600 dark:text-red-400 text-sm">{error}</div>}
+                    {content && content.contents?.map((item, i) => (
+                    <div key={i} className="mb-4">
+                        <div className="text-xs text-slate-500 mb-1 font-mono">{item.uri} ({item.mimeType})</div>
+                        <div className="bg-white dark:bg-slate-900 p-4 rounded border border-slate-200 dark:border-slate-800 transition-colors duration-200">
+                            {item.text ? (
+                            <pre className="whitespace-pre-wrap text-sm text-slate-800 dark:text-slate-300 font-mono">{item.text}</pre>
+                            ) : item.blob ? (
+                            <div className="text-slate-500 italic">[Binary Data: {item.blob.length} bytes]</div>
+                            ) : null}
+                        </div>
+                    </div>
+                    ))}
+                </div>
+                </div>
+            );
+        }
+
+        function PromptViewer({ prompt, onGet }) {
+            const [args, setArgs] = useState({});
+            const [result, setResult] = useState(null);
+            const [loading, setLoading] = useState(false);
+
+            useEffect(() => {
+                const defaults = {};
+                prompt.arguments?.forEach((arg) => {
+                defaults[arg.name] = "";
+                });
+                setArgs(defaults);
+                setResult(null);
+            }, [prompt]);
+
+            const handleGet = async () => {
+                setLoading(true);
+                try {
+                const res = await onGet(args);
+                setResult(res);
+                } finally {
+                setLoading(false);
+                }
+            };
+
+            return (
+                <div className="flex flex-col">
+                <div className="p-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 transition-colors duration-200">
+                    <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-4">Prompt Arguments</h3>
+                    <div className="grid gap-4 max-w-lg">
+                    {prompt.arguments?.map((arg) => (
+                        <div key={arg.name}>
+                            <label className="block text-xs font-medium text-slate-500 mb-1">
+                            {arg.name} {arg.required && <span className="text-red-600 dark:text-red-400">*</span>}
+                            </label>
+                            <input 
+                            type="text" 
+                            value={args[arg.name] || ''}
+                            onChange={e => setArgs({...args, [arg.name]: e.target.value})}
+                            placeholder={arg.description}
+                            className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded px-3 py-2 text-sm text-slate-900 dark:text-slate-200 focus:border-indigo-500 outline-none transition-colors duration-200"
+                            />
+                        </div>
+                    ))}
+                    {(!prompt.arguments || prompt.arguments.length === 0) && (
+                        <div className="text-slate-500 text-sm italic">No arguments required.</div>
+                    )}
+                    <div className="pt-2">
+                        <button 
+                            onClick={handleGet}
+                            disabled={loading}
+                            className="flex items-center px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium rounded transition-colors disabled:opacity-50"
+                        >
+                            {loading ? <Activity className="w-4 h-4 animate-spin mr-2" /> : <MessageSquare className="w-4 h-4 mr-2" />}
+                            Get Prompt
+                        </button>
+                    </div>
+                    </div>
+                </div>
+                
+                {result && (
+                    <div className="p-6 bg-slate-50 dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 transition-colors duration-200">
+                        <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4">Messages</h3>
+                        <div className="space-y-4">
+                        {result.messages?.map((msg, i) => (
+                            <div key={i} className={`flex gap-4 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                            <div className={`max-w-[80%] rounded-lg p-4 transition-colors duration-200 ${msg.role === 'user' ? 'bg-indigo-100 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-500/30 text-slate-900 dark:text-slate-100' : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100'}`}>
+                                <div className="text-[10px] font-bold uppercase tracking-wider mb-1 opacity-50">{msg.role}</div>
+                                <div className="whitespace-pre-wrap text-sm">{msg.content.type === 'text' ? msg.content.text : '[Image]'}</div>
+                            </div>
+                            </div>
+                        ))}
+                        </div>
+                    </div>
+                )}
+                </div>
+            );
+        }
+
+        // --- Main App ---
+
+        function App() {
+            // Theme state
+            const [theme, setTheme] = useState(() => {
+                if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
+                    return 'light';
+                }
+                return 'dark';
+            });
+
+            const toggleTheme = () => {
+                setTheme(prev => prev === 'dark' ? 'light' : 'dark');
+            };
+
+            const [url, setUrl] = useState('http://localhost:3000/sse');
+            const [isConnected, setIsConnected] = useState(false);
+            const [connectionStatus, setConnectionStatus] = useState('disconnected');
+            const [errorMessage, setErrorMessage] = useState(null);
+            
+            const [serverCapabilities, setServerCapabilities] = useState({});
+            const [serverInfo, setServerInfo] = useState(null);
+            const [tools, setTools] = useState([]);
+            const [resources, setResources] = useState([]);
+            const [prompts, setPrompts] = useState([]);
+            const [clientMode, setClientMode] = useState('sse');
+            
+            const [activeTab, setActiveTab] = useState('tools');
+            const [selectedItem, setSelectedItem] = useState(null);
+            const [logs, setLogs] = useState([]);
+            
+            const mcpClient = useRef(null);
+
+            const addLog = useCallback((type, content) => {
+                setLogs(prev => [{
+                id: generateId(),
+                timestamp: new Date().toLocaleTimeString(),
+                type,
+                content
+                }, ...prev].slice(0, 500));
+            }, []);
+
+            const handleConnect = async () => {
+                if (!url) return;
+                
+                setConnectionStatus('connecting');
+                setErrorMessage(null);
+                setLogs([]);
+
+                try {
+                    const client = new McpClient(url, addLog);
+                    mcpClient.current = client;
+
+                    client.onOpen = () => {
+                        addLog('system', 'Connection Established.');
+                    };
+
+                    client.onError = (err) => {
+                        setConnectionStatus('error');
+                        setErrorMessage(err.message || 'Connection error. Check CORS and server status.');
+                        addLog('error', err);
+                        setIsConnected(false);
+                    };
+
+                    const mode = await client.connect();
+                    setClientMode(mode);
+                    
+                    if (mode === 'sse') {
+                        addLog('system', 'Sending Initialize Request (SSE Mode)...');
+                        const initResult = await client.sendRequest('initialize', {
+                            protocolVersion: '2024-11-05',
+                            capabilities: {
+                                roots: { listChanged: true },
+                                sampling: {}
+                            },
+                            clientInfo: {
+                                name: 'MCP-Inspector-Web',
+                                version: '1.0.0'
+                            }
+                        });
+
+                        setServerInfo(initResult.serverInfo);
+                        setServerCapabilities(initResult.capabilities);
+
+                        await client.sendNotification('notifications/initialized');
+                        addLog('system', 'Handshake Complete.');
+                    } else {
+                        addLog('system', 'Connected in HTTP Direct Mode. Skipping JSON-RPC handshake.');
+                        setServerInfo({ name: 'HTTP Endpoint Server', version: '1.0.0' });
+                    }
+
+                    setConnectionStatus('connected');
+                    setIsConnected(true);
+                    refreshCapabilities(client);
+
+                } catch (err) {
+                    setConnectionStatus('error');
+                    setErrorMessage(err.message || 'Failed to connect');
+                    addLog('error', err.message);
+                    setIsConnected(false);
+                }
+            };
+
+            const handleDisconnect = () => {
+                if (mcpClient.current) {
+                mcpClient.current.close();
+                mcpClient.current = null;
+                }
+                setIsConnected(false);
+                setConnectionStatus('disconnected');
+                setServerInfo(null);
+                setTools([]);
+                setResources([]);
+                setPrompts([]);
+                setSelectedItem(null);
+                addLog('system', 'Disconnected by user.');
+            };
+
+            const refreshCapabilities = async (client) => {
+                try {
+                const toolsResult = await client.sendRequest('tools/list', {});
+                setTools(toolsResult.tools || []);
+                
+                const resourcesResult = await client.sendRequest('resources/list', {});
+                setResources(resourcesResult.resources || []);
+
+                const promptsResult = await client.sendRequest('prompts/list', {});
+                setPrompts(promptsResult.prompts || []);
+                } catch (e) {
+                addLog('error', 'Failed to fetch capabilities: ' + e);
+                }
+            };
+
+            const executeTool = async (name, args) => {
+                if (!mcpClient.current) return;
+                try {
+                addLog('system', `Executing tool: ${name}`);
+                const result = await mcpClient.current.sendRequest('tools/call', {
+                    name,
+                    arguments: args
+                });
+                addLog('incoming', result);
+                return result;
+                } catch (error) {
+                addLog('error', error);
+                throw error;
+                }
+            };
+
+            const readResource = async (uri) => {
+                if (!mcpClient.current) return;
+                try {
+                addLog('system', `Reading resource: ${uri}`);
+                const result = await mcpClient.current.sendRequest('resources/read', { uri });
+                addLog('incoming', result);
+                return result;
+                } catch (error) {
+                addLog('error', error);
+                throw error;
+                }
+            };
+
+            const getPrompt = async (name, args) => {
+                if (!mcpClient.current) return;
+                try {
+                addLog('system', `Getting prompt: ${name}`);
+                const result = await mcpClient.current.sendRequest('prompts/get', {
+                    name,
+                    arguments: args
+                });
+                addLog('incoming', result);
+                return result;
+                } catch (error) {
+                addLog('error', error);
+                throw error;
+                }
+            };
+
+            return (
+                <div className={`${theme} h-screen w-full`}>
+                    <div className="flex h-full bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-sans overflow-hidden transition-colors duration-200">
+                    
+                    <div className="w-64 bg-slate-50 dark:bg-slate-950 border-r border-slate-200 dark:border-slate-800 flex flex-col transition-colors duration-200">
+                        <div className="p-4 border-b border-slate-200 dark:border-slate-800">
+                        <div className="flex items-center space-x-2 text-indigo-600 dark:text-indigo-400 font-bold text-lg mb-1">
+                            <Activity className="w-5 h-5" />
+                            <span>MCP Inspector</span>
+                        </div>
+                        <p className="text-xs text-slate-500">Protocol Tester & Client</p>
+                        </div>
+
+                        {isConnected ? (
+                        <div className="flex-1 overflow-y-auto py-2">
+                            <div className="px-3 mb-2">
+                            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Capabilities</div>
+                            <NavButton 
+                                active={activeTab === 'tools'} 
+                                onClick={() => { setActiveTab('tools'); setSelectedItem(null); }}
+                                icon={<Box className="w-4 h-4" />}
+                                label="Tools"
+                                count={tools.length}
+                            />
+                            <NavButton 
+                                active={activeTab === 'resources'} 
+                                onClick={() => { setActiveTab('resources'); setSelectedItem(null); }}
+                                icon={<Database className="w-4 h-4" />}
+                                label="Resources"
+                                count={resources.length}
+                            />
+                            <NavButton 
+                                active={activeTab === 'prompts'} 
+                                onClick={() => { setActiveTab('prompts'); setSelectedItem(null); }}
+                                icon={<MessageSquare className="w-4 h-4" />}
+                                label="Prompts"
+                                count={prompts.length}
+                            />
+                            </div>
+                            
+                            <div className="px-3 mt-4">
+                            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Monitoring</div>
+                            <NavButton 
+                                active={activeTab === 'logs'} 
+                                onClick={() => setActiveTab('logs')}
+                                icon={<Terminal className="w-4 h-4" />}
+                                label="Logs & Events"
+                            />
+                            </div>
+                        </div>
+                        ) : (
+                        <div className="flex-1 flex items-center justify-center p-4 text-slate-500 dark:text-slate-600 text-sm text-center">
+                            Connect to server to view capabilities
+                        </div>
+                        )}
+
+                        <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 transition-colors duration-200">
+                        <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs font-medium text-slate-400">Connection</span>
+                            <StatusBadge status={connectionStatus} mode={clientMode} />
+                        </div>
+                        {isConnected && serverInfo && (
+                            <div className="text-xs text-slate-500 truncate">
+                            {serverInfo.name} {serverInfo.version && `v${serverInfo.version}`}
+                            </div>
+                        )}
+                        </div>
+                    </div>
+
+                    <div className="flex-1 flex flex-col min-w-0">
+                        <header className="h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-6 shadow-sm z-10 transition-colors duration-200">
+                        {!isConnected ? (
+                            <div className="flex-1 max-w-3xl flex space-x-2">
+                            <div className="relative flex-1">
+                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <Wifi className="h-4 w-4 text-slate-400 dark:text-slate-500" />
+                                </div>
+                                <input
+                                type="text"
+                                value={url}
+                                onChange={(e) => setUrl(e.target.value)}
+                                placeholder="Enter MCP Endpoint URL (SSE or HTTP List)"
+                                className="block w-full rounded-md border-0 py-2 pl-10 pr-2 bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm transition-colors duration-200"
+                                />
+                            </div>
+                            <button
+                                onClick={handleConnect}
+                                disabled={connectionStatus === 'connecting'}
+                                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            >
+                                {connectionStatus === 'connecting' ? 'Connecting...' : 'Connect'}
+                            </button>
+                            </div>
+                        ) : (
+                            <div className="flex-1 flex items-center justify-between">
+                                <div className="flex items-center space-x-4">
+                                <div className="bg-green-100 text-green-700 dark:bg-green-500/10 dark:text-green-400 px-3 py-1 rounded-full text-xs font-medium border border-green-200 dark:border-green-500/20 flex items-center transition-colors duration-200">
+                                    <CheckCircle2 className="w-3 h-3 mr-1.5" />
+                                    Connected to {url}
+                                </div>
+                                {clientMode === 'http' && (
+                                    <div className="bg-blue-100 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400 px-3 py-1 rounded-full text-xs font-medium border border-blue-200 dark:border-blue-500/20 flex items-center transition-colors duration-200">
+                                    <Globe className="w-3 h-3 mr-1.5" />
+                                    HTTP Mode
+                                    </div>
+                                )}
+                                </div>
+                                <button
+                                onClick={handleDisconnect}
+                                className="text-xs text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 px-3 py-1.5 rounded transition-colors"
+                                >
+                                Disconnect
+                                </button>
+                            </div>
+                        )}
+                        
+                        <div className="ml-4 pl-4 border-l border-slate-200 dark:border-slate-800">
+                            <button 
+                                onClick={toggleTheme}
+                                className="p-2 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                                title="Toggle Theme"
+                            >
+                                {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+                            </button>
+                        </div>
+                        </header>
+
+                        <main className="flex-1 overflow-hidden relative">
+                        
+                        {connectionStatus === 'error' && (
+                            <div className="absolute inset-0 bg-slate-900/20 dark:bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                            <div className="bg-white dark:bg-slate-800 border border-red-200 dark:border-red-500/30 rounded-lg p-6 max-w-md w-full shadow-2xl transition-colors duration-200">
+                                <div className="flex items-center text-red-600 dark:text-red-400 mb-4">
+                                <AlertCircle className="w-6 h-6 mr-2" />
+                                <h3 className="text-lg font-semibold">Connection Failed</h3>
+                                </div>
+                                <p className="text-slate-700 dark:text-slate-300 mb-4 text-sm">{errorMessage}</p>
+                                <div className="bg-slate-100 dark:bg-slate-950 p-3 rounded text-xs text-slate-600 dark:text-slate-400 font-mono mb-4">
+                                Tip: Ensure your MCP server allows CORS from this origin.
+                                <br/>
+                                Headers: Access-Control-Allow-Origin: *
+                                </div>
+                                <div className="flex justify-end">
+                                <button 
+                                    onClick={() => setConnectionStatus('disconnected')}
+                                    className="bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-900 dark:text-white px-4 py-2 rounded text-sm transition-colors"
+                                >
+                                    Close
+                                </button>
+                                </div>
+                            </div>
+                            </div>
+                        )}
+
+                        {!isConnected && connectionStatus !== 'error' && (
+                            <div className="h-full flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 p-8 transition-colors duration-200">
+                            <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-2xl flex items-center justify-center mb-6 ring-4 ring-slate-100 dark:ring-slate-800/50">
+                                <Settings className="w-8 h-8 text-slate-400" />
+                            </div>
+                            <h2 className="text-xl font-medium text-slate-700 dark:text-slate-300 mb-2">No Connection</h2>
+                            <p className="text-sm max-w-md text-center">
+                                Enter an MCP Server URL above.<br/>
+                                Supports standard SSE endpoints or HTTP Tool Lists (JSON).
+                            </p>
+                            </div>
+                        )}
+
+                        {isConnected && (
+                            <div className="h-full flex">
+                            {activeTab !== 'logs' && (
+                                <div className="w-72 bg-slate-50 dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col transition-colors duration-200">
+                                <div className="p-3 border-b border-slate-200 dark:border-slate-800">
+                                    <div className="relative">
+                                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400 dark:text-slate-500" />
+                                    <input 
+                                        type="text" 
+                                        placeholder={`Search ${activeTab}...`}
+                                        className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded pl-9 pr-3 py-2 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none text-slate-900 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-600 transition-colors duration-200"
+                                    />
+                                    </div>
+                                </div>
+                                <div className="flex-1 overflow-y-auto">
+                                    {activeTab === 'tools' && (
+                                    <ItemList 
+                                        items={tools} 
+                                        selectedId={selectedItem?.name} 
+                                        onSelect={setSelectedItem} 
+                                        icon={<Box className="w-4 h-4 text-indigo-500 dark:text-indigo-400" />}
+                                        getLabel={(i) => i.name}
+                                        getSubLabel={(i) => i.description || (i.endpoint ? `${i.method} ${i.endpoint}` : '')}
+                                    />
+                                    )}
+                                    {activeTab === 'resources' && (
+                                    <ItemList 
+                                        items={resources} 
+                                        selectedId={selectedItem?.uri} 
+                                        onSelect={setSelectedItem} 
+                                        icon={<FileText className="w-4 h-4 text-emerald-500 dark:text-emerald-400" />}
+                                        getLabel={(i) => i.name}
+                                        getSubLabel={(i) => i.uri}
+                                    />
+                                    )}
+                                    {activeTab === 'prompts' && (
+                                    <ItemList 
+                                        items={prompts} 
+                                        selectedId={selectedItem?.name} 
+                                        onSelect={setSelectedItem} 
+                                        icon={<MessageSquare className="w-4 h-4 text-amber-500 dark:text-amber-400" />}
+                                        getLabel={(i) => i.name}
+                                        getSubLabel={(i) => i.description}
+                                    />
+                                    )}
+                                </div>
+                                </div>
+                            )}
+
+                            <div className="flex-1 overflow-y-auto bg-slate-100 dark:bg-slate-800/30 transition-colors duration-200">
+                                {activeTab === 'logs' ? (
+                                <LogViewer logs={logs} onClear={() => setLogs([])} />
+                                ) : selectedItem ? (
+                                <div className="p-8 max-w-4xl mx-auto">
+                                    <div className="mb-6">
+                                    <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">{selectedItem.name}</h1>
+                                    <p className="text-slate-600 dark:text-slate-400">{selectedItem.description || 'No description provided.'}</p>
+                                    {selectedItem.endpoint && (
+                                        <div className="flex items-center gap-2 mt-2">
+                                            <span className="px-2 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 text-xs border border-blue-200 dark:border-blue-500/20 font-mono">
+                                            {selectedItem.method || 'GET'}
+                                            </span>
+                                            <span className="text-xs text-slate-500 font-mono">{selectedItem.endpoint}</span>
+                                        </div>
+                                    )}
+                                    {selectedItem.mimeType && (
+                                        <span className="inline-block mt-2 px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs">
+                                        {selectedItem.mimeType}
+                                        </span>
+                                    )}
+                                    </div>
+
+                                    <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm transition-colors duration-200">
+                                    {activeTab === 'tools' && (
+                                        <ToolExecutor tool={selectedItem} onExecute={(args) => executeTool(selectedItem.name, args)} />
+                                    )}
+                                    {activeTab === 'resources' && (
+                                        <ResourceViewer resource={selectedItem} onRead={() => readResource(selectedItem.uri)} />
+                                    )}
+                                    {activeTab === 'prompts' && (
+                                        <PromptViewer prompt={selectedItem} onGet={(args) => getPrompt(selectedItem.name, args)} />
+                                    )}
+                                    </div>
+
+                                    <div className="mt-8">
+                                    <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-3">Raw Schema</h3>
+                                    <pre className="bg-slate-50 dark:bg-slate-950 p-4 rounded-lg overflow-x-auto text-xs text-slate-600 dark:text-slate-400 font-mono border border-slate-200 dark:border-slate-800 transition-colors duration-200">
+                                        {JSON.stringify(selectedItem, null, 2)}
+                                    </pre>
+                                    </div>
+
+                                </div>
+                                ) : (
+                                <div className="h-full flex items-center justify-center text-slate-400 dark:text-slate-500">
+                                    <p>Select an item from the sidebar to view details</p>
+                                </div>
+                                )}
+                            </div>
+                            </div>
+                        )}
+                        </main>
+                    </div>
+                    </div>
+                </div>
+            );
+        }
+
+        const root = createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
