@@ -1,1 +1,4323 @@
-yet empty
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ROR Organizations Map – OpenStreetMap</title>
+    <meta name="description" content="Interactive ROR organizations map with advanced filtering, spatial selection, CSV upload, and detailed organization metadata." />
+    <meta name="keywords" content="ROR, Research Organization Registry, organizations map, CSV map, geospatial filter, Leaflet, OpenStreetMap" />
+    <meta name="author" content="ROR Map" />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+    <meta name="theme-color" content="#0070e8" />
+    <meta name="color-scheme" content="light" />
+    <link rel="canonical" href="https://example.com/ror-map" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="ROR Organizations Map" />
+    <meta property="og:description" content="Explore and filter ROR organizations on an interactive world map." />
+    <meta property="og:url" content="https://example.com/ror-map" />
+    <meta property="og:site_name" content="ROR Organizations Map" />
+    <meta property="og:image" content="https://example.com/ror-map/preview.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="ROR Organizations Map" />
+    <meta name="twitter:description" content="Interactive map of ROR organizations with filters, upload, and spatial tools." />
+    <meta name="twitter:image" content="https://example.com/ror-map/preview.png" />
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "ROR Organizations Map",
+      "applicationCategory": "DataVisualizationApplication",
+      "operatingSystem": "Any",
+      "description": "Interactive ROR organizations map with filtering, CSV upload, and spatial exploration tools."
+    }
+    </script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flag-icons@7.2.3/css/flag-icons.min.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <style>
+        html, body { margin:0; padding:0; height:100%; font-family: system-ui, -apple-system, sans-serif; }
+        #map { width:100%; height:100%; }
+        #header {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            background: rgba(255,255,255,0.95);
+            padding: 8px 16px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+            font-size: 15px;
+            font-weight: 600;
+            color: #222;
+            pointer-events: none;
+        }
+        .side-panel {
+            z-index: 1000;
+            width: min(360px, calc(100vw - 20px));
+            max-width: calc(100vw - 20px);
+            box-sizing: border-box;
+            background: rgba(255,255,255,0.96);
+            border: 1px solid rgba(0,0,0,0.12);
+            border-radius: 10px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+            font-size: 13px;
+            font-family: "Segoe UI", Tahoma, Geneva, sans-serif;
+        }
+        .side-panel summary {
+            cursor: pointer;
+            list-style: none;
+            padding: 10px 12px;
+            font-weight: 700;
+            color: #0a3d7d;
+            user-select: none;
+            background: rgba(255,255,255,0.98);
+            border-radius: 10px;
+        }
+        .side-panel summary::-webkit-details-marker { display: none; }
+        .side-panel summary::after {
+            content: "▾";
+            float: right;
+            transition: transform 150ms ease;
+        }
+        .side-panel[open] summary::after { transform: rotate(180deg); }
+        #control-stack {
+            position: absolute;
+            top: 114px;
+            left: 10px;
+            z-index: 1000;
+            width: min(360px, calc(100vw - 20px));
+            max-width: calc(100vw - 20px);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            box-sizing: border-box;
+        }
+        .filter-body {
+            border-top: 1px solid rgba(0,0,0,0.1);
+            padding: 10px 12px 12px;
+        }
+        .filter-row {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-bottom: 9px;
+        }
+        .filter-row label {
+            color: #334;
+            font-weight: 600;
+            font-size: 12px;
+        }
+        .filter-label {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+        .filter-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 18px;
+            height: 18px;
+            padding: 0 6px;
+            border-radius: 999px;
+            background: #0a3d7d;
+            color: #fff;
+            font-size: 11px;
+            font-weight: 700;
+            line-height: 1;
+        }
+        .filter-badge[hidden] {
+            display: none;
+        }
+        .filter-control {
+            width: 100%;
+            display: block;
+            box-sizing: border-box;
+            border: 1px solid rgba(0,0,0,0.2);
+            border-radius: 6px;
+            padding: 6px 8px;
+            font-size: 13px;
+            background: #fff;
+        }
+        .filter-control[multiple]:not(.select2-hidden-accessible) {
+            min-height: 96px;
+        }
+        .select2-container {
+            width: 100% !important;
+        }
+        .select2-container .select2-selection--multiple {
+            border: 1px solid rgba(0,0,0,0.2);
+            border-radius: 6px;
+            min-height: 38px !important;
+            font-size: 13px;
+        }
+        .select2-container--default .select2-selection--multiple .select2-selection__rendered {
+            display: block;
+            min-height: 30px;
+            padding: 4px 8px 2px;
+            margin: 0;
+        }
+        .select2-container--default .select2-selection--multiple .select2-selection__choice {
+            margin: 2px 4px 2px 0;
+            background: #eef5ff;
+            border: 1px solid #b6cef6;
+        }
+        .select2-container--default .select2-selection--multiple .select2-selection__placeholder {
+            margin: 0;
+            line-height: 28px;
+        }
+        .select2-container--default .select2-search--inline {
+            margin: 0;
+            padding: 0;
+        }
+        .select2-container--default .select2-search--inline .select2-search__field {
+            margin: 0 !important;
+            line-height: 1.4;
+            height: auto !important;
+        }
+        .filter-select-actions {
+            display: flex;
+            gap: 8px;
+        }
+        .filter-select-actions button {
+            border: 1px solid rgba(10,61,125,0.22);
+            background: #f8fbff;
+            color: #0a3d7d;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 3px 9px;
+            cursor: pointer;
+        }
+        .filter-note {
+            font-size: 11px;
+            color: #516;
+            line-height: 1.3;
+        }
+        .year-slider-row {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .year-slider-row label {
+            font-size: 11px;
+            color: #556;
+            font-weight: 600;
+        }
+        .year-slider {
+            width: 100%;
+            margin: 0;
+            accent-color: #0070e8;
+        }
+        .upload-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .spinner {
+            width: 12px;
+            height: 12px;
+            border: 2px solid rgba(0,0,0,0.2);
+            border-top-color: #0070e8;
+            border-radius: 50%;
+            animation: spin 800ms linear infinite;
+        }
+        .spinner[hidden] {
+            display: none;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .filter-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-top: 4px;
+        }
+        .filter-actions button {
+            border: none;
+            border-radius: 6px;
+            padding: 7px 10px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .filter-actions button[type="button"] {
+            background: #f3f3f3;
+            color: #222;
+        }
+        .filter-actions button[type="submit"] {
+            background: #0070e8;
+            color: #fff;
+        }
+        .control-button {
+            width: 100%;
+            box-sizing: border-box;
+            border: 1px solid rgba(0,0,0,0.12);
+            border-radius: 10px;
+            background: rgba(255,255,255,0.96);
+            color: #0a3d7d;
+            font-size: 15px;
+            font-weight: 700;
+            text-align: left;
+            padding: 12px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+            cursor: pointer;
+        }
+        .spatial-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+        .spatial-actions button {
+            border: 1px solid rgba(0,0,0,0.16);
+            border-radius: 6px;
+            padding: 6px 8px;
+            font-size: 12px;
+            background: #fafafa;
+            cursor: pointer;
+        }
+        .spatial-actions button[data-primary="true"] {
+            background: #0070e8;
+            color: #fff;
+            border-color: #0070e8;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 2000;
+            left: 0; top: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.65);
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-content {
+            background: #fff;
+            max-width: 620px;
+            width: 92%;
+            max-height: 88vh;
+            overflow-y: auto;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            position: relative;
+        }
+        .filter-modal-content {
+            width: min(50vw, 900px);
+            max-width: calc(100vw - 24px);
+            max-height: 82vh;
+        }
+        .filter-modal-body {
+            padding: 16px 20px 20px;
+        }
+        .modal-header {
+            padding: 20px 24px 12px;
+            border-bottom: 1px solid #eee;
+        }
+        .modal-header h2 {
+            margin: 0;
+            font-size: 1.35rem;
+            color: #0066cc;
+        }
+        .modal-body {
+            padding: 20px 24px;
+            line-height: 1.5;
+        }
+        .info-row {
+            display: grid;
+            grid-template-columns: 140px 1fr;
+            gap: 8px 16px;
+            margin-bottom: 12px;
+            font-size: 0.95rem;
+        }
+        .info-row strong {
+            color: #444;
+        }
+        .location-with-flag {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .location-with-flag .fi {
+            border-radius: 2px;
+        }
+        .modal-footer {
+            padding: 16px 24px;
+            border-top: 1px solid #eee;
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .modal-footer button {
+            padding: 8px 12px;
+            border: 1px solid rgba(0,0,0,0.2);
+            border-radius: 6px;
+            cursor: pointer;
+            background: #fff;
+        }
+        .modal-footer button.primary {
+            background: #0066cc;
+            border-color: #0066cc;
+            color: #fff;
+        }
+        .close-btn {
+            position: absolute;
+            top: 14px;
+            right: 18px;
+            font-size: 28px;
+            cursor: pointer;
+            color: #999;
+            line-height: 1;
+        }
+        .close-btn:hover { color: #333; }
+        a { color: #0066cc; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        @media (max-width: 680px) {
+            #header {
+                width: calc(100% - 20px);
+                left: 10px;
+                transform: none;
+                text-align: center;
+                font-size: 14px;
+            }
+            #control-stack,
+            .side-panel {
+                width: calc(100% - 20px);
+            }
+            .filter-modal-content {
+                width: calc(100vw - 16px);
+                max-height: 90vh;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="header">ROR Organizations Map • <span id="count"></span> markers • Click any marker for details</div>
+    <div id="control-stack">
+        <button type="button" id="open-filter-modal" class="control-button">Filters</button>
+        <details class="side-panel" id="upload-panel">
+            <summary>Upload ROR CSV</summary>
+            <div class="filter-body">
+                <div class="filter-row">
+                    <label for="csv-upload">Replace map data</label>
+                    <input id="csv-upload" class="filter-control" type="file" accept=".csv,text/csv">
+                    <div class="upload-status">
+                        <span id="csv-upload-spinner" class="spinner" hidden aria-hidden="true"></span>
+                        <span id="csv-upload-status" class="filter-note">Upload a new CSV file to replace map data.</span>
+                    </div>
+                    <span class="filter-note">
+                        Get the latest CSV:
+                        <a href="https://zenodo.org/records/18419061" target="_blank" rel="noopener noreferrer">zenodo.org/records/18419061</a>
+                    </span>
+                </div>
+            </div>
+        </details>
+    </div>
+    <div id="map"></div>
+
+    <div id="filter-modal" class="modal">
+        <div class="modal-content filter-modal-content">
+            <span class="close-btn" id="filter-modal-close-x">×</span>
+            <div class="modal-header">
+                <h2>Filters</h2>
+            </div>
+            <div class="modal-body filter-modal-body">
+                <form id="filter-form">
+                    <div class="filter-row">
+                        <label for="filter-search">Search</label>
+                        <input id="filter-search" class="filter-control" type="search" placeholder="Name, city, or country">
+                    </div>
+                    <div class="filter-row">
+                        <label for="filter-country" class="filter-label">Country <span id="badge-filter-country" class="filter-badge" hidden>0</span></label>
+                        <select id="filter-country" class="filter-control" multiple></select>
+                        <div class="filter-select-actions">
+                            <button type="button" data-select-target="filter-country" data-select-action="all">Select all</button>
+                            <button type="button" data-select-target="filter-country" data-select-action="clear">Clear all</button>
+                        </div>
+                    </div>
+                    <div class="filter-row">
+                        <label for="filter-status" class="filter-label">Status <span id="badge-filter-status" class="filter-badge" hidden>0</span></label>
+                        <select id="filter-status" class="filter-control" multiple></select>
+                        <div class="filter-select-actions">
+                            <button type="button" data-select-target="filter-status" data-select-action="all">Select all</button>
+                            <button type="button" data-select-target="filter-status" data-select-action="clear">Clear all</button>
+                        </div>
+                    </div>
+                    <div class="filter-row">
+                        <label for="filter-type" class="filter-label">Type <span id="badge-filter-type" class="filter-badge" hidden>0</span></label>
+                        <select id="filter-type" class="filter-control" multiple></select>
+                        <div class="filter-select-actions">
+                            <button type="button" data-select-target="filter-type" data-select-action="all">Select all</button>
+                            <button type="button" data-select-target="filter-type" data-select-action="clear">Clear all</button>
+                        </div>
+                    </div>
+                    <div class="filter-row">
+                        <label>Established year</label>
+                        <input id="filter-year-from" class="filter-control" type="number" min="1000" max="2099" placeholder="From year">
+                        <input id="filter-year-to" class="filter-control" type="number" min="1000" max="2099" placeholder="To year">
+                        <div class="year-slider-row">
+                            <label for="filter-year-from-slider">From slider</label>
+                            <input id="filter-year-from-slider" class="year-slider" type="range" min="1000" max="2099" value="1000" step="1">
+                        </div>
+                        <div class="year-slider-row">
+                            <label for="filter-year-to-slider">To slider</label>
+                            <input id="filter-year-to-slider" class="year-slider" type="range" min="1000" max="2099" value="2099" step="1">
+                        </div>
+                    </div>
+                    <div class="filter-actions">
+                        <button type="submit">Apply</button>
+                        <button type="button" id="filter-reset">Reset</button>
+                    </div>
+                    <div class="filter-row">
+                        <label>Spatial tools</label>
+                        <div class="spatial-actions">
+                            <button type="button" id="spatial-bbox">BBox select</button>
+                            <button type="button" id="spatial-lasso">Lasso select</button>
+                            <button type="button" id="spatial-clear">Clear selection</button>
+                            <button type="button" id="spatial-clear-map">Clear map</button>
+                            <button type="button" id="spatial-export-visible" data-primary="true">Export visible</button>
+                        </div>
+                        <span id="spatial-status" class="filter-note">No spatial selection active.</span>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="filter-modal-close-btn" class="primary">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal -->
+    <div id="modal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" id="modal-close-x">×</span>
+            <div class="modal-header">
+                <h2 id="modal-name"></h2>
+            </div>
+            <div class="modal-body" id="modal-body"></div>
+            <div class="modal-footer">
+                <button type="button" id="modal-copy-ror">Copy ROR ID</button>
+                <button type="button" id="modal-open-website" disabled>Open website safely</button>
+                <button type="button" id="modal-close-btn" class="primary">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Full parsed dataset from the provided CSV (all rows with valid coordinates)
+        let organizations = [
+  {
+    "id": "04ttjf776",
+    "full_id": "https://ror.org/04ttjf776",
+    "name": "RMIT University",
+    "lat": -37.814,
+    "lng": 144.96332,
+    "website": "https://www.rmit.edu.au/",
+    "types": "education; funder",
+    "status": "active",
+    "country": "Australia",
+    "city": "Melbourne",
+    "established": "1887",
+    "relationships": "child: https://ror.org/039p7nx39, https://ror.org/03m3ca021, https://ror.org/004axh929; related: https://ror.org/010mv7n52"
+  },
+  {
+    "id": "01rxfrp27",
+    "full_id": "https://ror.org/01rxfrp27",
+    "name": "La Trobe University",
+    "lat": -37.814,
+    "lng": 144.96332,
+    "website": "http://www.latrobe.edu.au/",
+    "types": "education; funder",
+    "status": "active",
+    "country": "Australia",
+    "city": "Melbourne",
+    "established": "1964",
+    "relationships": "related: https://ror.org/010mv7n52, https://ror.org/0484pjq71, https://ror.org/03grnna41"
+  },
+  {
+    "id": "023q4bk22",
+    "full_id": "https://ror.org/023q4bk22",
+    "name": "Central Queensland University",
+    "lat": -23.38032,
+    "lng": 150.50595,
+    "website": "https://www.cqu.edu.au/",
+    "types": "education; funder",
+    "status": "active",
+    "country": "Australia",
+    "city": "Rockhampton",
+    "established": "1967",
+    "relationships": ""
+  },
+  {
+    "id": "006jxzx88",
+    "full_id": "https://ror.org/006jxzx88",
+    "name": "Bond University",
+    "lat": -28.00029,
+    "lng": 153.43088,
+    "website": "http://bond.edu.au/",
+    "types": "education; funder",
+    "status": "active",
+    "country": "Australia",
+    "city": "Gold Coast",
+    "established": "1987",
+    "relationships": "related: https://ror.org/05eq01d13, https://ror.org/0257s2812"
+  },
+  {
+    "id": "00wfvh315",
+    "full_id": "https://ror.org/00wfvh315",
+    "name": "Charles Sturt University",
+    "lat": -33.41665,
+    "lng": 149.5806,
+    "website": "http://www.csu.edu.au/",
+    "types": "education; funder",
+    "status": "active",
+    "country": "Australia",
+    "city": "Bathurst",
+    "established": "1989",
+    "relationships": "related: https://ror.org/05newpx76"
+  },
+  {
+    "id": "00nx6aa03",
+    "full_id": "https://ror.org/00nx6aa03",
+    "name": "Mater Research",
+    "lat": -27.46794,
+    "lng": 153.02809,
+    "website": "http://research.mater.org.au/",
+    "types": "facility",
+    "status": "active",
+    "country": "Australia",
+    "city": "Brisbane",
+    "established": "1998",
+    "relationships": ""
+  },
+  {
+    "id": "046fa4y88",
+    "full_id": "https://ror.org/046fa4y88",
+    "name": "The Heart Research Institute",
+    "lat": -33.89835,
+    "lng": 151.17754,
+    "website": "http://www.hri.org.au/",
+    "types": "facility; funder",
+    "status": "active",
+    "country": "Australia",
+    "city": "Newtown",
+    "established": "1989",
+    "relationships": ""
+  },
+  {
+    "id": "02d439m40",
+    "full_id": "https://ror.org/02d439m40",
+    "name": "University Mental Health Research Institute",
+    "lat": 37.98376,
+    "lng": 23.72784,
+    "website": "https://www.epipsi.gr/",
+    "types": "education",
+    "status": "active",
+    "country": "Greece",
+    "city": "Athens",
+    "established": "1989",
+    "relationships": ""
+  },
+  {
+    "id": "05m7zw681",
+    "full_id": "https://ror.org/05m7zw681",
+    "name": "Rio Tinto (United Kingdom)",
+    "lat": 51.50853,
+    "lng": -0.12574,
+    "website": "http://www.riotinto.com/",
+    "types": "company",
+    "status": "active",
+    "country": "United Kingdom",
+    "city": "London",
+    "established": "1873",
+    "relationships": "child: https://ror.org/03z28c516, https://ror.org/00mv4xe50, https://ror.org/01gykgk63, https://ror.org/01z3j2f47, https://ror.org/02vhqqh86"
+  },
+  {
+    "id": "03awtex73",
+    "full_id": "https://ror.org/03awtex73",
+    "name": "Arup Group (United States)",
+    "lat": 42.3751,
+    "lng": -71.10561,
+    "website": "http://www.arup.com/Global_locations/USA.aspx",
+    "types": "company",
+    "status": "active",
+    "country": "United States",
+    "city": "Cambridge",
+    "established": "1946",
+    "relationships": "parent: https://ror.org/057d3rj91"
+  },
+  {
+    "id": "00kv9pj15",
+    "full_id": "https://ror.org/00kv9pj15",
+    "name": "BT Group (United Kingdom)",
+    "lat": 51.50853,
+    "lng": -0.12574,
+    "website": "http://www.btplc.com/",
+    "types": "company; funder",
+    "status": "active",
+    "country": "United Kingdom",
+    "city": "London",
+    "established": "1980",
+    "relationships": "child: https://ror.org/01xzpd518, https://ror.org/03308db07"
+  },
+  {
+    "id": "03mjtdk61",
+    "full_id": "https://ror.org/03mjtdk61",
+    "name": "Mater Health Services",
+    "lat": -27.46794,
+    "lng": 153.02809,
+    "website": "http://www.mater.org.au/",
+    "types": "healthcare",
+    "status": "active",
+    "country": "Australia",
+    "city": "Brisbane",
+    "established": "1906",
+    "relationships": "child: https://ror.org/05wqhv079, https://ror.org/04mxrtj31, https://ror.org/01k4cfw02, https://ror.org/03j4rdg62, https://ror.org/03w94w157"
+  },
+  {
+    "id": "04yyp8h20",
+    "full_id": "https://ror.org/04yyp8h20",
+    "name": "Pilkington (United Kingdom)",
+    "lat": 53.45,
+    "lng": -2.73333,
+    "website": "https://www.pilkington.com/en-GB/uk",
+    "types": "company",
+    "status": "active",
+    "country": "United Kingdom",
+    "city": "St Helens",
+    "established": "1826",
+    "relationships": ""
+  },
+  {
+    "id": "022rkxt86",
+    "full_id": "https://ror.org/022rkxt86",
+    "name": "Trojan Technologies (Canada)",
+    "lat": 42.98339,
+    "lng": -81.23304,
+    "website": "http://www.trojantechnologies.com/",
+    "types": "company",
+    "status": "active",
+    "country": "Canada",
+    "city": "London",
+    "established": "1976",
+    "relationships": ""
+  },
+  {
+    "id": "01wddqe20",
+    "full_id": "https://ror.org/01wddqe20",
+    "name": "The Alfred Hospital",
+    "lat": -37.814,
+    "lng": 144.96332,
+    "website": "https://www.alfredhealth.org.au/the-alfred",
+    "types": "healthcare",
+    "status": "active",
+    "country": "Australia",
+    "city": "Melbourne",
+    "established": "1871",
+    "relationships": "parent: https://ror.org/04scfb908; related: https://ror.org/02bfwt286"
+  },
+  {
+    "id": "037mpqg03",
+    "full_id": "https://ror.org/037mpqg03",
+    "name": "Xstrata (United Kingdom)",
+    "lat": 51.50853,
+    "lng": -0.12574,
+    "website": "",
+    "types": "company",
+    "status": "active",
+    "country": "United Kingdom",
+    "city": "London",
+    "established": "1926",
+    "relationships": ""
+  },
+  {
+    "id": "050b31k83",
+    "full_id": "https://ror.org/050b31k83",
+    "name": "Hunter New England Local Health District",
+    "lat": -32.92953,
+    "lng": 151.7801,
+    "website": "http://www.hnehealth.nsw.gov.au/Pages/home.aspx",
+    "types": "healthcare; funder",
+    "status": "active",
+    "country": "Australia",
+    "city": "Newcastle",
+    "established": "",
+    "relationships": "child: https://ror.org/045tkmf79, https://ror.org/00w1xt505, https://ror.org/048sjbt91, https://ror.org/0187t0j49, https://ror.org/02f53md90"
+  },
+  {
+    "id": "01q8f6705",
+    "full_id": "https://ror.org/01q8f6705",
+    "name": "BASF (Germany)",
+    "lat": 49.48121,
+    "lng": 8.44641,
+    "website": "https://www.basf.com/en.html",
+    "types": "company; funder",
+    "status": "active",
+    "country": "Germany",
+    "city": "Ludwigshafen am Rhein",
+    "established": "1865",
+    "relationships": "child: https://ror.org/04qwmjc96, https://ror.org/01jk97k74, https://ror.org/04t6d6d70, https://ror.org/03an0wj74, https://ror.org/00sgajx84, https://ror.org/03ccpe393, https://ror.org/03g6j6055, https://ror.org/059zcg682, https://ror.org/002yzpx87"
+  },
+  {
+    "id": "03ebg0v16",
+    "full_id": "https://ror.org/03ebg0v16",
+    "name": "Boys Town",
+    "lat": 41.25626,
+    "lng": -95.94043,
+    "website": "http://www.boystown.org/",
+    "types": "nonprofit; funder",
+    "status": "active",
+    "country": "United States",
+    "city": "Omaha",
+    "established": "1917",
+    "relationships": ""
+  },
+  {
+    "id": "041b40q78",
+    "full_id": "https://ror.org/041b40q78",
+    "name": "Olympus (Australia)",
+    "lat": -33.86785,
+    "lng": 151.20732,
+    "website": "https://www.olympus.com.au/",
+    "types": "company",
+    "status": "active",
+    "country": "Australia",
+    "city": "Sydney",
+    "established": "1919",
+    "relationships": "parent: https://ror.org/01v0pgv63"
+  },
+  {
+    "id": "04jc0r179",
+    "full_id": "https://ror.org/04jc0r179",
+    "name": "UK Coal",
+    "lat": 53.52285,
+    "lng": -1.13116,
+    "website": "http://www.ukcoal.com/",
+    "types": "company",
+    "status": "active",
+    "country": "United Kingdom",
+    "city": "Doncaster",
+    "established": "1974",
+    "relationships": ""
+  },
+  {
+    "id": "03e8s1d88",
+    "full_id": "https://ror.org/03e8s1d88",
+    "name": "Potsdam Institute for Climate Impact Research",
+    "lat": 52.39886,
+    "lng": 13.06566,
+    "website": "https://www.pik-potsdam.de/",
+    "types": "facility",
+    "status": "active",
+    "country": "Germany",
+    "city": "Potsdam",
+    "established": "1992",
+    "relationships": "parent: https://ror.org/01n6r0e97"
+  },
+  {
+    "id": "02khfkr46",
+    "full_id": "https://ror.org/02khfkr46",
+    "name": "Institute of Electron Technology",
+    "lat": 52.22977,
+    "lng": 21.01178,
+    "website": "http://www.ite.waw.pl/en/index.php",
+    "types": "facility",
+    "status": "active",
+    "country": "Poland",
+    "city": "Warsaw",
+    "established": "1966",
+    "relationships": ""
+  },
+  {
+    "id": "03fs4aq04",
+    "full_id": "https://ror.org/03fs4aq04",
+    "name": "Institute of Fundamental Technological Research",
+    "lat": 52.22977,
+    "lng": 21.01178,
+    "website": "http://www.ippt.pan.pl/en/",
+    "types": "facility",
+    "status": "active",
+    "country": "Poland",
+    "city": "Warsaw",
+    "established": "1952",
+    "relationships": "parent: https://ror.org/01dr6c206"
+  },
+  {
+    "id": "04zgvy449",
+    "full_id": "https://ror.org/04zgvy449",
+    "name": "PSA Peugeot Citroën (France)",
+    "lat": 48.85341,
+    "lng": 2.3488,
+    "website": "http://www.psa-peugeot-citroen.com/en",
+    "types": "company",
+    "status": "active",
+    "country": "France",
+    "city": "Paris",
+    "established": "1976",
+    "relationships": ""
+  },
+  {
+    "id": "02vwnat91",
+    "full_id": "https://ror.org/02vwnat91",
+    "name": "London South Bank University",
+    "lat": 51.50853,
+    "lng": -0.12574,
+    "website": "http://www.lsbu.ac.uk/",
+    "types": "education; funder",
+    "status": "active",
+    "country": "United Kingdom",
+    "city": "London",
+    "established": "1892",
+    "relationships": "related: https://ror.org/04tpqnr72"
+  },
+  {
+    "id": "020268t49",
+    "full_id": "https://ror.org/020268t49",
+    "name": "Papiertechnische Stiftung",
+    "lat": 50.97221,
+    "lng": 13.86741,
+    "website": "http://www.ptspaper.com/",
+    "types": "nonprofit",
+    "status": "active",
+    "country": "Germany",
+    "city": "Heidenau",
+    "established": "1951",
+    "relationships": ""
+  },
+  {
+    "id": "0249v7n71",
+    "full_id": "https://ror.org/0249v7n71",
+    "name": "Institute for Computer Science and Control",
+    "lat": 47.49835,
+    "lng": 19.04045,
+    "website": "https://www.sztaki.hu/?en",
+    "types": "facility; funder",
+    "status": "active",
+    "country": "Hungary",
+    "city": "Budapest",
+    "established": "1964",
+    "relationships": "parent: https://ror.org/02ks8qq67"
+  },
+  {
+    "id": "037m6e306",
+    "full_id": "https://ror.org/037m6e306",
+    "name": "Pera (United Kingdom)",
+    "lat": 52.76588,
+    "lng": -0.88693,
+    "website": "https://www.perainternational.com/",
+    "types": "company",
+    "status": "active",
+    "country": "United Kingdom",
+    "city": "Melton Mowbray",
+    "established": "1946",
+    "relationships": "child: https://ror.org/044pe5q70"
+  },
+  {
+    "id": "04v98kq37",
+    "full_id": "https://ror.org/04v98kq37",
+    "name": "Renault (France)",
+    "lat": 48.83545,
+    "lng": 2.24128,
+    "website": "https://group.renault.com/en/",
+    "types": "company",
+    "status": "active",
+    "country": "France",
+    "city": "Boulogne-Billancourt",
+    "established": "1899",
+    "relationships": "child: https://ror.org/01qxec746"
+  },
+  {
+    "id": "00f1xkb20",
+    "full_id": "https://ror.org/00f1xkb20",
+    "name": "Robosoft (France)",
+    "lat": 43.43698,
+    "lng": -1.59294,
+    "website": "http://www.robosoft.com/en/home/",
+    "types": "company",
+    "status": "active",
+    "country": "France",
+    "city": "Bidart",
+    "established": "1985",
+    "relationships": ""
+  },
+  {
+    "id": "017ph0934",
+    "full_id": "https://ror.org/017ph0934",
+    "name": "University of National and World Economy",
+    "lat": 42.69751,
+    "lng": 23.32415,
+    "website": "http://www.unwe.bg/en",
+    "types": "education",
+    "status": "active",
+    "country": "Bulgaria",
+    "city": "Sofia",
+    "established": "1920",
+    "relationships": ""
+  },
+  {
+    "id": "01ypwfg63",
+    "full_id": "https://ror.org/01ypwfg63",
+    "name": "Ecofys (Netherlands)",
+    "lat": 52.09083,
+    "lng": 5.12222,
+    "website": "http://www.ecofys.com/en/",
+    "types": "company",
+    "status": "active",
+    "country": "The Netherlands",
+    "city": "Utrecht",
+    "established": "1984",
+    "relationships": ""
+  },
+  {
+    "id": "008x57b05",
+    "full_id": "https://ror.org/008x57b05",
+    "name": "University of Antwerp",
+    "lat": 51.22047,
+    "lng": 4.40026,
+    "website": "https://www.uantwerpen.be/en/",
+    "types": "education; funder",
+    "status": "active",
+    "country": "Belgium",
+    "city": "Antwerp",
+    "established": "2003",
+    "relationships": "child: https://ror.org/00hm4a331, https://ror.org/041x7eh14; related: https://ror.org/01hwamj44"
+  },
+  {
+    "id": "02550n020",
+    "full_id": "https://ror.org/02550n020",
+    "name": "European Synchrotron Radiation Facility",
+    "lat": 45.17869,
+    "lng": 5.71479,
+    "website": "http://www.esrf.eu/",
+    "types": "nonprofit; funder",
+    "status": "active",
+    "country": "France",
+    "city": "Grenoble",
+    "established": "1988",
+    "relationships": ""
+  },
+  {
+    "id": "053bqv655",
+    "full_id": "https://ror.org/053bqv655",
+    "name": "STMicroelectronics (Italy)",
+    "lat": 45.46427,
+    "lng": 9.18951,
+    "website": "http://www2.st.com/content/st_com/en.html",
+    "types": "company",
+    "status": "active",
+    "country": "Italy",
+    "city": "Milan",
+    "established": "1957",
+    "relationships": "parent: https://ror.org/00wm3b005"
+  },
+  {
+    "id": "01nn35n25",
+    "full_id": "https://ror.org/01nn35n25",
+    "name": "Institute of Accelerating Systems and Applications",
+    "lat": 37.98376,
+    "lng": 23.72784,
+    "website": "http://www.iasa.gr/",
+    "types": "education",
+    "status": "active",
+    "country": "Greece",
+    "city": "Athens",
+    "established": "1994",
+    "relationships": ""
+  },
+  {
+    "id": "04zsytt76",
+    "full_id": "https://ror.org/04zsytt76",
+    "name": "Wise & Munro Learning Research",
+    "lat": 52.07667,
+    "lng": 4.29861,
+    "website": "http://www.wisenmunro.org/",
+    "types": "facility",
+    "status": "active",
+    "country": "The Netherlands",
+    "city": "The Hague",
+    "established": "",
+    "relationships": ""
+  },
+  {
+    "id": "031bsb921",
+    "full_id": "https://ror.org/031bsb921",
+    "name": "University of Mannheim",
+    "lat": 49.4891,
+    "lng": 8.46694,
+    "website": "https://www.uni-mannheim.de/en/",
+    "types": "education; funder",
+    "status": "active",
+    "country": "Germany",
+    "city": "Mannheim",
+    "established": "1763",
+    "relationships": "child: https://ror.org/0010cp777, https://ror.org/02n94hw85, https://ror.org/003xvvt95, https://ror.org/05bv91d86"
+  },
+  {
+    "id": "003sav189",
+    "full_id": "https://ror.org/003sav189",
+    "name": "Oldenburger Institut für Informatik",
+    "lat": 53.14118,
+    "lng": 8.21467,
+    "website": "http://www.offis.de/en/start.html",
+    "types": "facility",
+    "status": "active",
+    "country": "Germany",
+    "city": "Oldenburg",
+    "established": "1991",
+    "relationships": ""
+  },
+  {
+    "id": "01t0n3b84",
+    "full_id": "https://ror.org/01t0n3b84",
+    "name": "Consorzio Pisa Ricerche",
+    "lat": 43.70853,
+    "lng": 10.4036,
+    "website": "http://www.cpr.it/",
+    "types": "facility",
+    "status": "active",
+    "country": "Italy",
+    "city": "Pisa",
+    "established": "1987",
+    "relationships": ""
+  },
+  {
+    "id": "034fmtr90",
+    "full_id": "https://ror.org/034fmtr90",
+    "name": "empirica - Communication and Technology Research",
+    "lat": 50.73438,
+    "lng": 7.09549,
+    "website": "http://empirica.com/",
+    "types": "facility",
+    "status": "active",
+    "country": "Germany",
+    "city": "Bonn",
+    "established": "1988",
+    "relationships": ""
+  },
+  {
+    "id": "05b6ypc36",
+    "full_id": "https://ror.org/05b6ypc36",
+    "name": "Volvo (Sweden)",
+    "lat": 57.70716,
+    "lng": 11.96679,
+    "website": "http://volvogroup.com/",
+    "types": "company",
+    "status": "active",
+    "country": "Sweden",
+    "city": "Gothenburg",
+    "established": "1927",
+    "relationships": "child: https://ror.org/02d0esb25, https://ror.org/003snev59, https://ror.org/03e7zen21, https://ror.org/00mkdan60"
+  },
+  {
+    "id": "04d4dxm04",
+    "full_id": "https://ror.org/04d4dxm04",
+    "name": "Société de Mathématiques Appliquées et de Sciences Humaines",
+    "lat": 48.85341,
+    "lng": 2.3488,
+    "website": "http://www.smash.fr/",
+    "types": "facility",
+    "status": "active",
+    "country": "France",
+    "city": "Paris",
+    "established": "1976",
+    "relationships": ""
+  },
+  {
+    "id": "0454vek02",
+    "full_id": "https://ror.org/0454vek02",
+    "name": "Société Nationale des Chemins de Fer Français (France)",
+    "lat": 48.93564,
+    "lng": 2.35387,
+    "website": "https://www.sncf.com/en",
+    "types": "company",
+    "status": "active",
+    "country": "France",
+    "city": "Saint-Denis",
+    "established": "1938",
+    "relationships": ""
+  },
+  {
+    "id": "05re2b915",
+    "full_id": "https://ror.org/05re2b915",
+    "name": "European Road Transport Telematics Implementation Co-Ordination",
+    "lat": 50.85045,
+    "lng": 4.34878,
+    "website": "http://ertico.com/",
+    "types": "other",
+    "status": "active",
+    "country": "Belgium",
+    "city": "Brussels",
+    "established": "1991",
+    "relationships": ""
+  },
+  {
+    "id": "00qt5ka73",
+    "full_id": "https://ror.org/00qt5ka73",
+    "name": "Arttic (France)",
+    "lat": 48.85341,
+    "lng": 2.3488,
+    "website": "http://www.arttic.eu/pages/en/home.php",
+    "types": "company",
+    "status": "active",
+    "country": "France",
+    "city": "Paris",
+    "established": "1987",
+    "relationships": ""
+  },
+  {
+    "id": "035gy9016",
+    "full_id": "https://ror.org/035gy9016",
+    "name": "Tecnatom (Spain)",
+    "lat": 40.55555,
+    "lng": -3.62733,
+    "website": "http://www.tecnatom.es/en/",
+    "types": "company",
+    "status": "active",
+    "country": "Spain",
+    "city": "San Sebastián de los Reyes",
+    "established": "1957",
+    "relationships": ""
+  },
+  {
+    "id": "04vfyfx73",
+    "full_id": "https://ror.org/04vfyfx73",
+    "name": "Teer Coatings (United Kingdom)",
+    "lat": 52.26667,
+    "lng": -2.15,
+    "website": "http://www.teercoatings.co.uk/",
+    "types": "company",
+    "status": "active",
+    "country": "United Kingdom",
+    "city": "Droitwich",
+    "established": "1985",
+    "relationships": ""
+  },
+  {
+    "id": "033vryh36",
+    "full_id": "https://ror.org/033vryh36",
+    "name": "Tekniker",
+    "lat": 43.18493,
+    "lng": -2.47158,
+    "website": "http://www.tekniker.es/es",
+    "types": "nonprofit",
+    "status": "active",
+    "country": "Spain",
+    "city": "Eibar",
+    "established": "1981",
+    "relationships": ""
+  },
+  {
+    "id": "042e7c302",
+    "full_id": "https://ror.org/042e7c302",
+    "name": "Multitel",
+    "lat": 50.45413,
+    "lng": 3.95229,
+    "website": "http://www.multitel.be/",
+    "types": "facility",
+    "status": "active",
+    "country": "Belgium",
+    "city": "Mons",
+    "established": "1999",
+    "relationships": ""
+  },
+  {
+    "id": "02vbxt202",
+    "full_id": "https://ror.org/02vbxt202",
+    "name": "ThyssenKrupp (Germany)",
+    "lat": 51.45657,
+    "lng": 7.01228,
+    "website": "https://www.thyssenkrupp.com/",
+    "types": "company; funder",
+    "status": "active",
+    "country": "Germany",
+    "city": "Essen",
+    "established": "1842",
+    "relationships": "child: https://ror.org/00akjja53, https://ror.org/04y0ypp13, https://ror.org/0034dyb91, https://ror.org/01zbqc597, https://ror.org/026kmj910, https://ror.org/03w3b4f85, https://ror.org/01hcney72"
+  },
+  {
+    "id": "01c74sd89",
+    "full_id": "https://ror.org/01c74sd89",
+    "name": "STMicroelectronics (France)",
+    "lat": 48.8162,
+    "lng": 2.31393,
+    "website": "http://www.st.com/content/st_com/en.html",
+    "types": "company",
+    "status": "active",
+    "country": "France",
+    "city": "Montrouge",
+    "established": "1957",
+    "relationships": "parent: https://ror.org/00wm3b005"
+  },
+  {
+    "id": "02q8h2f47",
+    "full_id": "https://ror.org/02q8h2f47",
+    "name": "Institut Technologique Forêt Cellulose Bois-Construction Ameublement",
+    "lat": 48.85341,
+    "lng": 2.3488,
+    "website": "http://www.fcba.fr/",
+    "types": "facility",
+    "status": "active",
+    "country": "France",
+    "city": "Paris",
+    "established": "1952",
+    "relationships": ""
+  },
+  {
+    "id": "030wyr187",
+    "full_id": "https://ror.org/030wyr187",
+    "name": "Finnish Institute of Occupational Health",
+    "lat": 60.16952,
+    "lng": 24.93545,
+    "website": "http://www.ttl.fi/en/Pages/default.aspx",
+    "types": "facility",
+    "status": "active",
+    "country": "Finland",
+    "city": "Helsinki",
+    "established": "1945",
+    "relationships": ""
+  },
+  {
+    "id": "023z51242",
+    "full_id": "https://ror.org/023z51242",
+    "name": "Enterprise Ireland",
+    "lat": 53.33306,
+    "lng": -6.24889,
+    "website": "http://www.enterprise-ireland.com/en/",
+    "types": "government; funder",
+    "status": "active",
+    "country": "Ireland",
+    "city": "Dublin",
+    "established": "1998",
+    "relationships": ""
+  },
+  {
+    "id": "0261g6j35",
+    "full_id": "https://ror.org/0261g6j35",
+    "name": "Chaudhary Charan Singh Haryana Agricultural University",
+    "lat": 29.15394,
+    "lng": 75.72294,
+    "website": "http://www.hau.ernet.in/",
+    "types": "education",
+    "status": "active",
+    "country": "India",
+    "city": "Hisar",
+    "established": "1970",
+    "relationships": ""
+  },
+  {
+    "id": "02kta5139",
+    "full_id": "https://ror.org/02kta5139",
+    "name": "Universidad Autónoma Metropolitana",
+    "lat": 19.42847,
+    "lng": -99.12766,
+    "website": "http://www.uam.mx/",
+    "types": "education; funder",
+    "status": "active",
+    "country": "Mexico",
+    "city": "Mexico City",
+    "established": "1974",
+    "relationships": ""
+  },
+  {
+    "id": "00cb9w016",
+    "full_id": "https://ror.org/00cb9w016",
+    "name": "Ain Shams University",
+    "lat": 30.06263,
+    "lng": 31.24967,
+    "website": "http://www.asu.edu.eg/",
+    "types": "education; funder",
+    "status": "active",
+    "country": "Egypt",
+    "city": "Cairo",
+    "established": "1950",
+    "relationships": "related: https://ror.org/00p59qs14"
+  },
+  {
+    "id": "01jm19r53",
+    "full_id": "https://ror.org/01jm19r53",
+    "name": "TuTech Innovation (Germany)",
+    "lat": 53.55073,
+    "lng": 9.99302,
+    "website": "http://tutech.net/index.php/page/about-us-2011-03-04#1",
+    "types": "company",
+    "status": "active",
+    "country": "Germany",
+    "city": "Hamburg",
+    "established": "2004",
+    "relationships": "child: https://ror.org/013e7et93"
+  },
+  {
+    "id": "006rhxn50",
+    "full_id": "https://ror.org/006rhxn50",
+    "name": "FORCE Technology (Denmark)",
+    "lat": 55.6455,
+    "lng": 12.41008,
+    "website": "http://forcetechnology.com/en",
+    "types": "company",
+    "status": "active",
+    "country": "Denmark",
+    "city": "Brøndby",
+    "established": "1940",
+    "relationships": "child: https://ror.org/03whc3s66, https://ror.org/04rccsv84"
+  },
+  {
+    "id": "00bxsm637",
+    "full_id": "https://ror.org/00bxsm637",
+    "name": "MTU Aero Engines (Germany)",
+    "lat": 48.13743,
+    "lng": 11.57549,
+    "website": "http://www.mtu.de/?fc=1",
+    "types": "company",
+    "status": "active",
+    "country": "Germany",
+    "city": "Munich",
+    "established": "1934",
+    "relationships": ""
+  },
+  {
+    "id": "05564r514",
+    "full_id": "https://ror.org/05564r514",
+    "name": "Association of European Renewable Energy Research Centres",
+    "lat": 50.85045,
+    "lng": 4.34878,
+    "website": "http://www.eurec.be/en/",
+    "types": "other",
+    "status": "active",
+    "country": "Belgium",
+    "city": "Brussels",
+    "established": "1991",
+    "relationships": ""
+  },
+  {
+    "id": "02hbhxa68",
+    "full_id": "https://ror.org/02hbhxa68",
+    "name": "Airbus (United Kingdom)",
+    "lat": 51.45523,
+    "lng": -2.59665,
+    "website": "http://www.airbus.com/company/worldwide-presence/airbus-in-uk/",
+    "types": "company; funder",
+    "status": "active",
+    "country": "United Kingdom",
+    "city": "Bristol",
+    "established": "1970",
+    "relationships": "parent: https://ror.org/02z4rsp10"
+  },
+  {
+    "id": "01r4bn552",
+    "full_id": "https://ror.org/01r4bn552",
+    "name": "Von Karman Institute for Fluid Dynamics",
+    "lat": 50.74645,
+    "lng": 4.35754,
+    "website": "https://www.vki.ac.be/",
+    "types": "nonprofit",
+    "status": "active",
+    "country": "Belgium",
+    "city": "Sint-Genesius-Rode",
+    "established": "1956",
+    "relationships": ""
+  },
+  {
+    "id": "003vfy751",
+    "full_id": "https://ror.org/003vfy751",
+    "name": "Université du Burundi",
+    "lat": -3.38193,
+    "lng": 29.36142,
+    "website": "http://www.ub.edu.bi/",
+    "types": "education",
+    "status": "active",
+    "country": "Burundi",
+    "city": "Bujumbura",
+    "established": "1964",
+    "relationships": ""
+  },
+  {
+    "id": "03q21mh05",
+    "full_id": "https://ror.org/03q21mh05",
+    "name": "Cairo University",
+    "lat": 30.00944,
+    "lng": 31.20861,
+    "website": "http://cu.edu.eg/Home",
+    "types": "education; funder",
+    "status": "active",
+    "country": "Egypt",
+    "city": "Giza",
+    "established": "1908",
+    "relationships": ""
+  },
+  {
+    "id": "058s98e36",
+    "full_id": "https://ror.org/058s98e36",
+    "name": "Promotion of Operational Links With Integrated Services",
+    "lat": 50.85045,
+    "lng": 4.34878,
+    "website": "http://www.polis-online.org/",
+    "types": "other",
+    "status": "active",
+    "country": "Belgium",
+    "city": "Brussels",
+    "established": "1989",
+    "relationships": ""
+  },
+  {
+    "id": "04je6yw13",
+    "full_id": "https://ror.org/04je6yw13",
+    "name": "Cheikh Anta Diop University",
+    "lat": 14.6937,
+    "lng": -17.44406,
+    "website": "http://www.ucad.sn/",
+    "types": "education; funder",
+    "status": "active",
+    "country": "Senegal",
+    "city": "Dakar",
+    "established": "1957",
+    "relationships": ""
+  },
+  {
+    "id": "05n8n9378",
+    "full_id": "https://ror.org/05n8n9378",
+    "name": "Eduardo Mondlane University",
+    "lat": -25.96553,
+    "lng": 32.58322,
+    "website": "http://www.uem.mz/index.php",
+    "types": "education",
+    "status": "active",
+    "country": "Mozambique",
+    "city": "Maputo",
+    "established": "1962",
+    "relationships": ""
+  },
+  {
+    "id": "0080acb59",
+    "full_id": "https://ror.org/0080acb59",
+    "name": "John Radcliffe Hospital",
+    "lat": 51.75222,
+    "lng": -1.25596,
+    "website": "http://www.ouh.nhs.uk/hospitals/jr/default.aspx",
+    "types": "healthcare",
+    "status": "active",
+    "country": "United Kingdom",
+    "city": "Oxford",
+    "established": "1973",
+    "relationships": "parent: https://ror.org/0358tcd02, https://ror.org/03h2bh287; related: https://ror.org/04v2twj65, https://ror.org/052gg0110"
+  },
+  {
+    "id": "0176yjw32",
+    "full_id": "https://ror.org/0176yjw32",
+    "name": "Universidade Federal de Minas Gerais",
+    "lat": -19.92083,
+    "lng": -43.93778,
+    "website": "https://www.ufmg.br/english/",
+    "types": "education; funder",
+    "status": "active",
+    "country": "Brazil",
+    "city": "Belo Horizonte",
+    "established": "1927",
+    "relationships": "related: https://ror.org/035rpst33"
+  },
+  {
+    "id": "049bdss47",
+    "full_id": "https://ror.org/049bdss47",
+    "name": "Joanneum Research",
+    "lat": 47.06667,
+    "lng": 15.45,
+    "website": "http://www.joanneum.at/en.html",
+    "types": "facility",
+    "status": "active",
+    "country": "Austria",
+    "city": "Graz",
+    "established": "1950",
+    "relationships": ""
+  },
+  {
+    "id": "03bqt8z64",
+    "full_id": "https://ror.org/03bqt8z64",
+    "name": "National Institute of Technology",
+    "lat": 59.91273,
+    "lng": 10.74609,
+    "website": "https://teknologisk.no/",
+    "types": "company",
+    "status": "active",
+    "country": "Norway",
+    "city": "Oslo",
+    "established": "1917",
+    "relationships": ""
+  },
+  {
+    "id": "050y0ba80",
+    "full_id": "https://ror.org/050y0ba80",
+    "name": "D'Appolonia (Italy)",
+    "lat": 44.40478,
+    "lng": 8.94439,
+    "website": "http://www.dappolonia.it/en",
+    "types": "company",
+    "status": "active",
+    "country": "Italy",
+    "city": "Genoa",
+    "established": "1956",
+    "relationships": ""
+  },
+  {
+    "id": "02gpdzc63",
+    "full_id": "https://ror.org/02gpdzc63",
+    "name": "Labor (Italy)",
+    "lat": 41.89193,
+    "lng": 12.51133,
+    "website": "http://www.labor-eu.net/ENG_Labor_Chi_Siamo.html",
+    "types": "company",
+    "status": "active",
+    "country": "Italy",
+    "city": "Rome",
+    "established": "",
+    "relationships": ""
+  },
+  {
+    "id": "00a0jsq62",
+    "full_id": "https://ror.org/00a0jsq62",
+    "name": "London School of Hygiene & Tropical Medicine",
+    "lat": 51.50853,
+    "lng": -0.12574,
+    "website": "http://www.lshtm.ac.uk/",
+    "types": "education; funder",
+    "status": "active",
+    "country": "United Kingdom",
+    "city": "London",
+    "established": "1899",
+    "relationships": "child: https://ror.org/025wfj672, https://ror.org/045z18t19; parent: https://ror.org/04cw6st05"
+  },
+  {
+    "id": "050w2g362",
+    "full_id": "https://ror.org/050w2g362",
+    "name": "Inovamais",
+    "lat": 41.18207,
+    "lng": -8.68908,
+    "website": "http://inovamais.eu/en/",
+    "types": "company",
+    "status": "active",
+    "country": "Portugal",
+    "city": "Matosinhos Municipality",
+    "established": "1997",
+    "relationships": ""
+  },
+  {
+    "id": "006x15235",
+    "full_id": "https://ror.org/006x15235",
+    "name": "National Institute of Engineering, Technology and Innovation",
+    "lat": 38.71667,
+    "lng": -9.13333,
+    "website": "http://www.ineti.pt/",
+    "types": "facility",
+    "status": "active",
+    "country": "Portugal",
+    "city": "Lisbon",
+    "established": "",
+    "relationships": ""
+  },
+  {
+    "id": "02f9det96",
+    "full_id": "https://ror.org/02f9det96",
+    "name": "University of Hildesheim",
+    "lat": 52.15077,
+    "lng": 9.95112,
+    "website": "https://www.uni-hildesheim.de/en/uni/",
+    "types": "education",
+    "status": "active",
+    "country": "Germany",
+    "city": "Hildesheim",
+    "established": "1978",
+    "relationships": ""
+  },
+  {
+    "id": "04gqx4x78",
+    "full_id": "https://ror.org/04gqx4x78",
+    "name": "Università Campus Bio-Medico",
+    "lat": 41.89193,
+    "lng": 12.51133,
+    "website": "http://www.unicampus.it/",
+    "types": "education; funder",
+    "status": "active",
+    "country": "Italy",
+    "city": "Rome",
+    "established": "1991",
+    "relationships": "related: https://ror.org/04gqbd180"
+  },
+  {
+    "id": "023bq8521",
+    "full_id": "https://ror.org/023bq8521",
+    "name": "Saint Petersburg State Electrotechnical University",
+    "lat": 59.93863,
+    "lng": 30.31413,
+    "website": "http://www.eltech.ru/en/university",
+    "types": "education",
+    "status": "active",
+    "country": "Russia",
+    "city": "St Petersburg",
+    "established": "1886",
+    "relationships": ""
+  },
+  {
+    "id": "00av5yz18",
+    "full_id": "https://ror.org/00av5yz18",
+    "name": "Health and Safety Executive",
+    "lat": 53.46667,
+    "lng": -3.01667,
+    "website": "http://www.hse.gov.uk/",
+    "types": "government; funder",
+    "status": "active",
+    "country": "United Kingdom",
+    "city": "Bootle",
+    "established": "1974",
+    "relationships": ""
+  },
+  {
+    "id": "0542q3127",
+    "full_id": "https://ror.org/0542q3127",
+    "name": "Lviv Polytechnic National University",
+    "lat": 49.83826,
+    "lng": 24.02324,
+    "website": "http://www.lp.edu.ua/en",
+    "types": "education; funder",
+    "status": "active",
+    "country": "Ukraine",
+    "city": "Lviv",
+    "established": "1844",
+    "relationships": ""
+  },
+  {
+    "id": "00a99v816",
+    "full_id": "https://ror.org/00a99v816",
+    "name": "GABO:mi",
+    "lat": 48.13743,
+    "lng": 11.57549,
+    "website": "http://www.gabo-mi.com/",
+    "types": "company",
+    "status": "active",
+    "country": "Germany",
+    "city": "Munich",
+    "established": "2005",
+    "relationships": ""
+  },
+  {
+    "id": "03z27es23",
+    "full_id": "https://ror.org/03z27es23",
+    "name": "University of San Simón",
+    "lat": -17.3895,
+    "lng": -66.1568,
+    "website": "http://www.umss.edu.bo/",
+    "types": "education",
+    "status": "active",
+    "country": "Bolivia",
+    "city": "Cochabamba",
+    "established": "1832",
+    "relationships": ""
+  },
+  {
+    "id": "052fdp564",
+    "full_id": "https://ror.org/052fdp564",
+    "name": "Enel (Italy)",
+    "lat": 41.89193,
+    "lng": 12.51133,
+    "website": "https://www.enel.com/",
+    "types": "company",
+    "status": "active",
+    "country": "Italy",
+    "city": "Rome",
+    "established": "1962",
+    "relationships": "child: https://ror.org/055j3vp97"
+  },
+  {
+    "id": "04aaeds92",
+    "full_id": "https://ror.org/04aaeds92",
+    "name": "Israel Aerospace Industries (Israel)",
+    "lat": 31.9467,
+    "lng": 34.8903,
+    "website": "http://www.iai.co.il/2013/22031-en/homepage.aspx",
+    "types": "company; funder",
+    "status": "active",
+    "country": "Israel",
+    "city": "Lod",
+    "established": "1953",
+    "relationships": ""
+  },
+  {
+    "id": "04vtx5s55",
+    "full_id": "https://ror.org/04vtx5s55",
+    "name": "University of Malawi",
+    "lat": -15.38596,
+    "lng": 35.3188,
+    "website": "http://www.unima.mw/",
+    "types": "education",
+    "status": "active",
+    "country": "Malawi",
+    "city": "Zomba",
+    "established": "1964",
+    "relationships": "child: https://ror.org/045z18t19, https://ror.org/03tebt685; related: https://ror.org/025sthg37"
+  },
+  {
+    "id": "02436cs38",
+    "full_id": "https://ror.org/02436cs38",
+    "name": "Unilever (Netherlands)",
+    "lat": 51.9225,
+    "lng": 4.47917,
+    "website": "https://www.unilever.nl/",
+    "types": "company",
+    "status": "active",
+    "country": "The Netherlands",
+    "city": "Rotterdam",
+    "established": "1930",
+    "relationships": "child: https://ror.org/04nq8gx07; parent: https://ror.org/05n8ah907"
+  },
+  {
+    "id": "04s4j9e43",
+    "full_id": "https://ror.org/04s4j9e43",
+    "name": "Omar Bongo University",
+    "lat": 0.39241,
+    "lng": 9.45356,
+    "website": "http://universiteomarbongo.org/",
+    "types": "education",
+    "status": "active",
+    "country": "Gabon",
+    "city": "Libreville",
+    "established": "1970",
+    "relationships": ""
+  },
+  {
+    "id": "03tbh6y23",
+    "full_id": "https://ror.org/03tbh6y23",
+    "name": "University of the Philippines Diliman",
+    "lat": 14.6488,
+    "lng": 121.0509,
+    "website": "http://www.upd.edu.ph/",
+    "types": "education",
+    "status": "active",
+    "country": "Philippines",
+    "city": "Quezon City",
+    "established": "1949",
+    "relationships": "parent: https://ror.org/02hqkr514"
+  },
+  {
+    "id": "030s54078",
+    "full_id": "https://ror.org/030s54078",
+    "name": "University of the Philippines Los Baños",
+    "lat": 14.17025,
+    "lng": 121.24181,
+    "website": "http://www.uplb.edu.ph/",
+    "types": "education",
+    "status": "active",
+    "country": "Philippines",
+    "city": "Los Baños",
+    "established": "1909",
+    "relationships": "parent: https://ror.org/02hqkr514"
+  },
+  {
+    "id": "02ahxbh87",
+    "full_id": "https://ror.org/02ahxbh87",
+    "name": "Biomedical Primate Research Centre",
+    "lat": 52.03634,
+    "lng": 4.32501,
+    "website": "http://www.bprc.nl/en/home/",
+    "types": "nonprofit",
+    "status": "active",
+    "country": "The Netherlands",
+    "city": "Rijswijk",
+    "established": "",
+    "relationships": ""
+  },
+  {
+    "id": "038j9sn30",
+    "full_id": "https://ror.org/038j9sn30",
+    "name": "Shanghai Institute of Hypertension",
+    "lat": 31.22222,
+    "lng": 121.45806,
+    "website": "http://www.china-sih.com/",
+    "types": "facility",
+    "status": "active",
+    "country": "China",
+    "city": "Shanghai",
+    "established": "1958",
+    "relationships": ""
+  },
+  {
+    "id": "05rw9t746",
+    "full_id": "https://ror.org/05rw9t746",
+    "name": "IBM Research - Haifa",
+    "lat": 32.81841,
+    "lng": 34.9885,
+    "website": "http://research.ibm.com/labs/haifa/index.shtml",
+    "types": "facility",
+    "status": "active",
+    "country": "Israel",
+    "city": "Haifa",
+    "established": "1972",
+    "relationships": "parent: https://ror.org/0265w5591"
+  },
+  {
+    "id": "04xraxn18",
+    "full_id": "https://ror.org/04xraxn18",
+    "name": "Telethon Foundation",
+    "lat": 41.89193,
+    "lng": 12.51133,
+    "website": "https://www.telethon.it/en",
+    "types": "nonprofit; funder",
+    "status": "active",
+    "country": "Italy",
+    "city": "Rome",
+    "established": "1990",
+    "relationships": "child: https://ror.org/00f7kfd14, https://ror.org/036jn4298"
+  },
+  {
+    "id": "0046mja08",
+    "full_id": "https://ror.org/0046mja08",
+    "name": "An-Najah National University",
+    "lat": 32.22111,
+    "lng": 35.25444,
+    "website": "http://www.najah.edu/",
+    "types": "education; funder",
+    "status": "active",
+    "country": "Palestine",
+    "city": "Nablus",
+    "established": "1918",
+    "relationships": ""
+  },
+  {
+    "id": "04nbe0v26",
+    "full_id": "https://ror.org/04nbe0v26",
+    "name": "Institute of Studies for the Integration of Systems",
+    "lat": 41.89193,
+    "lng": 12.51133,
+    "website": "http://www.isis-it.com/",
+    "types": "facility",
+    "status": "active",
+    "country": "Italy",
+    "city": "Rome",
+    "established": "1971",
+    "relationships": ""
+  },
+  {
+    "id": "05nv2rz39",
+    "full_id": "https://ror.org/05nv2rz39",
+    "name": "University of Eswatini",
+    "lat": -26.47675,
+    "lng": 31.33274,
+    "website": "http://www.uniswa.sz/",
+    "types": "education",
+    "status": "active",
+    "country": "Eswatini",
+    "city": "Kwaluseni",
+    "established": "1982",
+    "relationships": ""
+  },
+  {
+    "id": "02jqtg033",
+    "full_id": "https://ror.org/02jqtg033",
+    "name": "Institute for Energy Technology",
+    "lat": 59.95597,
+    "lng": 11.04918,
+    "website": "http://www.ife.no/en/Frontpage-en",
+    "types": "facility",
+    "status": "active",
+    "country": "Norway",
+    "city": "Lillestrøm",
+    "established": "1948",
+    "relationships": ""
+  },
+  {
+    "id": "01jk32r56",
+    "full_id": "https://ror.org/01jk32r56",
+    "name": "Sirehna",
+    "lat": 47.21725,
+    "lng": -1.55336,
+    "website": "http://www.sirehna.com/",
+    "types": "company",
+    "status": "active",
+    "country": "France",
+    "city": "Nantes",
+    "established": "1986",
+    "relationships": ""
+  },
+  {
+    "id": "00wc07928",
+    "full_id": "https://ror.org/00wc07928",
+    "name": "University of Lomé",
+    "lat": 6.12874,
+    "lng": 1.22154,
+    "website": "http://www.univ-lome.tg/",
+    "types": "education",
+    "status": "active",
+    "country": "Togo",
+    "city": "Lomé",
+    "established": "1970",
+    "relationships": ""
+  },
+  {
+    "id": "001b4cb05",
+    "full_id": "https://ror.org/001b4cb05",
+    "name": "National University of Trujillo",
+    "lat": -8.11599,
+    "lng": -79.02998,
+    "website": "http://www.unitru.edu.pe/",
+    "types": "education; funder",
+    "status": "active",
+    "country": "Peru",
+    "city": "Trujillo",
+    "established": "1824",
+    "relationships": ""
+  },
+  {
+    "id": "00nxna028",
+    "full_id": "https://ror.org/00nxna028",
+    "name": "HR Wallingford",
+    "lat": 51.59982,
+    "lng": -1.1248,
+    "website": "http://www.hrwallingford.com/",
+    "types": "facility",
+    "status": "active",
+    "country": "United Kingdom",
+    "city": "Wallingford",
+    "established": "1947",
+    "relationships": ""
+  },
+  {
+    "id": "04ycpbx82",
+    "full_id": "https://ror.org/04ycpbx82",
+    "name": "University of Westminster",
+    "lat": 51.50853,
+    "lng": -0.12574,
+    "website": "http://www.westminster.ac.uk/",
+    "types": "education; funder",
+    "status": "active",
+    "country": "United Kingdom",
+    "city": "London",
+    "established": "1838",
+    "relationships": ""
+  },
+  {
+    "id": "03fkc8c64",
+    "full_id": "https://ror.org/03fkc8c64",
+    "name": "University of the West Indies",
+    "lat": 17.99702,
+    "lng": -76.79358,
+    "website": "http://www.mona.uwi.edu/",
+    "types": "education",
+    "status": "active",
+    "country": "Jamaica",
+    "city": "Kingston",
+    "established": "1948",
+    "relationships": "parent: https://ror.org/01t20sn94"
+  },
+  {
+    "id": "02qnsw591",
+    "full_id": "https://ror.org/02qnsw591",
+    "name": "Centre for European Economic Research",
+    "lat": 49.4891,
+    "lng": 8.46694,
+    "website": "http://www.zew.de/en/",
+    "types": "nonprofit",
+    "status": "active",
+    "country": "Germany",
+    "city": "Mannheim",
+    "established": "1990",
+    "relationships": "parent: https://ror.org/01n6r0e97"
+  },
+  {
+    "id": "014x8q810",
+    "full_id": "https://ror.org/014x8q810",
+    "name": "Zentrum für Sonnenenergie- und Wasserstoff-Forschung Baden-Württemberg",
+    "lat": 48.39841,
+    "lng": 9.99155,
+    "website": "http://www.zsw-bw.de/en/startseite.html",
+    "types": "nonprofit",
+    "status": "active",
+    "country": "Germany",
+    "city": "Ulm",
+    "established": "1988",
+    "relationships": ""
+  },
+  {
+    "id": "01nhzsw25",
+    "full_id": "https://ror.org/01nhzsw25",
+    "name": "Hydro-Québec",
+    "lat": 45.50884,
+    "lng": -73.58781,
+    "website": "http://www.hydroquebec.com/en/",
+    "types": "government; funder",
+    "status": "active",
+    "country": "Canada",
+    "city": "Montreal",
+    "established": "1944",
+    "relationships": ""
+  },
+  {
+    "id": "04838xh83",
+    "full_id": "https://ror.org/04838xh83",
+    "name": "Empresarios Agrupados",
+    "lat": 40.4165,
+    "lng": -3.70256,
+    "website": "http://www.empresariosagrupados.es/?lang=en",
+    "types": "other",
+    "status": "active",
+    "country": "Spain",
+    "city": "Madrid",
+    "established": "1971",
+    "relationships": ""
+  },
+  {
+    "id": "024xs2z82",
+    "full_id": "https://ror.org/024xs2z82",
+    "name": "ArcelorMittal (France)",
+    "lat": 49.259,
+    "lng": 2.43777,
+    "website": "http://www.arcelormittalinfrance.com/",
+    "types": "company; funder",
+    "status": "active",
+    "country": "France",
+    "city": "Montataire",
+    "established": "2006",
+    "relationships": "parent: https://ror.org/02bez8p50"
+  },
+  {
+    "id": "00tnppw48",
+    "full_id": "https://ror.org/00tnppw48",
+    "name": "Department for Environment Food and Rural Affairs",
+    "lat": 51.50853,
+    "lng": -0.12574,
+    "website": "https://www.gov.uk/government/organisations/department-for-environment-food-rural-affairs",
+    "types": "government; funder",
+    "status": "active",
+    "country": "United Kingdom",
+    "city": "London",
+    "established": "2001",
+    "relationships": "child: https://ror.org/010gf7388, https://ror.org/0378g3743, https://ror.org/04r7rxc53, https://ror.org/01zewfb16, https://ror.org/05299tt38, https://ror.org/03hkswm52, https://ror.org/00r66pz14, https://ror.org/03kjbs929, https://ror.org/04qke1n53; parent: https://ror.org/05wnh3t63"
+  },
+  {
+    "id": "01je6q363",
+    "full_id": "https://ror.org/01je6q363",
+    "name": "Centre Technique Industriel De La Construction Metallique",
+    "lat": 47.03336,
+    "lng": 5.32666,
+    "website": "https://www.cticm.com/",
+    "types": "other",
+    "status": "active",
+    "country": "France",
+    "city": "Saint-Aubin",
+    "established": "1962",
+    "relationships": ""
+  },
+  {
+    "id": "02fv8hj62",
+    "full_id": "https://ror.org/02fv8hj62",
+    "name": "Tecnalia",
+    "lat": 43.31283,
+    "lng": -1.97499,
+    "website": "http://www.tecnalia.com/en/",
+    "types": "other; funder",
+    "status": "active",
+    "country": "Spain",
+    "city": "Donostia / San Sebastian",
+    "established": "2003",
+    "relationships": "child: https://ror.org/03rf31e64"
+  },
+  {
+    "id": "05m5z4f19",
+    "full_id": "https://ror.org/05m5z4f19",
+    "name": "Steel Construction Institute",
+    "lat": 51.41082,
+    "lng": -0.6748,
+    "website": "http://www.steel-sci.org/",
+    "types": "other",
+    "status": "active",
+    "country": "United Kingdom",
+    "city": "Ascot",
+    "established": "",
+    "relationships": ""
+  },
+  {
+    "id": "04kgqpx54",
+    "full_id": "https://ror.org/04kgqpx54",
+    "name": "Voestalpine (Austria)",
+    "lat": 48.30639,
+    "lng": 14.28611,
+    "website": "http://www.voestalpine.com/group/en/",
+    "types": "company; funder",
+    "status": "active",
+    "country": "Austria",
+    "city": "Linz",
+    "established": "1938",
+    "relationships": "child: https://ror.org/00tgp6q68, https://ror.org/02jwef888, https://ror.org/044267y73"
+  },
+  {
+    "id": "042bdnm87",
+    "full_id": "https://ror.org/042bdnm87",
+    "name": "Svenskt Stål (Finland)",
+    "lat": 60.29414,
+    "lng": 25.04099,
+    "website": "http://www.ssab.fi/",
+    "types": "company",
+    "status": "active",
+    "country": "Finland",
+    "city": "Vantaa",
+    "established": "1878",
+    "relationships": ""
+  },
+  {
+    "id": "03bj8zh59",
+    "full_id": "https://ror.org/03bj8zh59",
+    "name": "Tata Steel (United Kingdom)",
+    "lat": 51.50853,
+    "lng": -0.12574,
+    "website": "http://www.tatasteeleurope.com/",
+    "types": "company",
+    "status": "active",
+    "country": "United Kingdom",
+    "city": "London",
+    "established": "1988",
+    "relationships": "parent: https://ror.org/001wtjx27"
+  },
+  {
+    "id": "022wqqf69",
+    "full_id": "https://ror.org/022wqqf69",
+    "name": "Centro de Estudios e Investigaciones Técnicas de Gipuzkoa",
+    "lat": 43.31283,
+    "lng": -1.97499,
+    "website": "http://ceit.es/en/",
+    "types": "nonprofit",
+    "status": "active",
+    "country": "Spain",
+    "city": "Donostia / San Sebastian",
+    "established": "1982",
+    "relationships": ""
+  },
+  {
+    "id": "047vb2x72",
+    "full_id": "https://ror.org/047vb2x72",
+    "name": "MATIMOP",
+    "lat": 32.08088,
+    "lng": 34.78057,
+    "website": "http://www.matimop.org.il/",
+    "types": "nonprofit",
+    "status": "active",
+    "country": "Israel",
+    "city": "Tel Aviv",
+    "established": "",
+    "relationships": ""
+  },
+  {
+    "id": "02npppw10",
+    "full_id": "https://ror.org/02npppw10",
+    "name": "BMT Group (United Kingdom)",
+    "lat": 51.50853,
+    "lng": -0.12574,
+    "website": "http://www.bmt.org/",
+    "types": "company",
+    "status": "active",
+    "country": "United Kingdom",
+    "city": "London",
+    "established": "1985",
+    "relationships": "child: https://ror.org/048pv7j43, https://ror.org/05c2mz691, https://ror.org/01fr3an09, https://ror.org/0272gsy54"
+  },
+  {
+    "id": "00jzexr10",
+    "full_id": "https://ror.org/00jzexr10",
+    "name": "Astrakhan State Technical University",
+    "lat": 46.34968,
+    "lng": 48.04076,
+    "website": "http://www.astu.org/",
+    "types": "education",
+    "status": "active",
+    "country": "Russia",
+    "city": "Astrakhan",
+    "established": "1930",
+    "relationships": ""
+  },
+  {
+    "id": "00yyp2526",
+    "full_id": "https://ror.org/00yyp2526",
+    "name": "Silsoe Research Institute",
+    "lat": 52.13459,
+    "lng": -0.46632,
+    "website": "http://www.silsoeresearch.org.uk/",
+    "types": "facility",
+    "status": "active",
+    "country": "United Kingdom",
+    "city": "Bedford",
+    "established": "1924",
+    "relationships": "parent: https://ror.org/00cwqg982"
+  },
+  {
+    "id": "0287e5797",
+    "full_id": "https://ror.org/0287e5797",
+    "name": "Siemens (United Kingdom)",
+    "lat": 51.33705,
+    "lng": -0.74261,
+    "website": "https://www.siemens.com/global/en/home.html",
+    "types": "company",
+    "status": "active",
+    "country": "United Kingdom",
+    "city": "Camberley",
+    "established": "1847",
+    "relationships": "parent: https://ror.org/059mq0909"
+  },
+  {
+    "id": "03dke3h47",
+    "full_id": "https://ror.org/03dke3h47",
+    "name": "Association of Science-Technology Centers",
+    "lat": 38.89511,
+    "lng": -77.03637,
+    "website": "http://www.astc.org/",
+    "types": "nonprofit; funder",
+    "status": "active",
+    "country": "United States",
+    "city": "Washington",
+    "established": "1973",
+    "relationships": ""
+  },
+  {
+    "id": "04mqy3p58",
+    "full_id": "https://ror.org/04mqy3p58",
+    "name": "Instituto de Engenharia de Sistemas e Computadores Investigação e Desenvolvimento",
+    "lat": 38.71667,
+    "lng": -9.13333,
+    "website": "https://www.inesc-id.pt/",
+    "types": "nonprofit",
+    "status": "active",
+    "country": "Portugal",
+    "city": "Lisbon",
+    "established": "2000",
+    "relationships": "parent: https://ror.org/033wn8m60"
+  },
+  {
+    "id": "006k2kk72",
+    "full_id": "https://ror.org/006k2kk72",
+    "name": "Düsseldorf University Hospital",
+    "lat": 51.22172,
+    "lng": 6.77616,
+    "website": "https://www.uni-duesseldorf.de/home/en/university-hospital.html",
+    "types": "healthcare",
+    "status": "active",
+    "country": "Germany",
+    "city": "Düsseldorf",
+    "established": "1907",
+    "relationships": "child: https://ror.org/01dc7nx94; related: https://ror.org/024z2rq82"
+  },
+  {
+    "id": "055zmrh94",
+    "full_id": "https://ror.org/055zmrh94",
+    "name": "John Innes Centre",
+    "lat": 52.62783,
+    "lng": 1.29834,
+    "website": "https://www.jic.ac.uk/",
+    "types": "facility",
+    "status": "active",
+    "country": "United Kingdom",
+    "city": "Norwich",
+    "established": "1910",
+    "relationships": "parent: https://ror.org/00cwqg982"
+  },
+  {
+    "id": "04zb59n70",
+    "full_id": "https://ror.org/04zb59n70",
+    "name": "Leibniz Institute for Solid State and Materials Research",
+    "lat": 51.05089,
+    "lng": 13.73832,
+    "website": "http://www.ifw-dresden.de/",
+    "types": "facility",
+    "status": "active",
+    "country": "Germany",
+    "city": "Dresden",
+    "established": "1992",
+    "relationships": "parent: https://ror.org/01n6r0e97"
+  },
+  {
+    "id": "02tc32w13",
+    "full_id": "https://ror.org/02tc32w13",
+    "name": "Irish Universities Association",
+    "lat": 53.33306,
+    "lng": -6.24889,
+    "website": "http://www.iua.ie/",
+    "types": "nonprofit",
+    "status": "active",
+    "country": "Ireland",
+    "city": "Dublin",
+    "established": "1972",
+    "relationships": ""
+  },
+  {
+    "id": "02pagex14",
+    "full_id": "https://ror.org/02pagex14",
+    "name": "Archimedes Foundation",
+    "lat": 59.43696,
+    "lng": 24.75353,
+    "website": "http://archimedes.ee/en/foundation/",
+    "types": "nonprofit; funder",
+    "status": "active",
+    "country": "Estonia",
+    "city": "Tallinn",
+    "established": "1997",
+    "relationships": ""
+  },
+  {
+    "id": "01xnwqx93",
+    "full_id": "https://ror.org/01xnwqx93",
+    "name": "University Hospital Bonn",
+    "lat": 50.73438,
+    "lng": 7.09549,
+    "website": "https://www.ukb.uni-bonn.de/",
+    "types": "healthcare",
+    "status": "active",
+    "country": "Germany",
+    "city": "Bonn",
+    "established": "1783",
+    "relationships": "child: https://ror.org/04f2wf871, https://ror.org/03941w909; related: https://ror.org/041nas322"
+  },
+  {
+    "id": "043rjaw23",
+    "full_id": "https://ror.org/043rjaw23",
+    "name": "Profactor (Austria)",
+    "lat": 48.04274,
+    "lng": 14.42127,
+    "website": "http://www.profactor.at/index.php?id=848&L=1",
+    "types": "company",
+    "status": "active",
+    "country": "Austria",
+    "city": "Steyr",
+    "established": "1995",
+    "relationships": ""
+  },
+  {
+    "id": "02qsqdv65",
+    "full_id": "https://ror.org/02qsqdv65",
+    "name": "Alstom (United Kingdom)",
+    "lat": 51.50853,
+    "lng": -0.12574,
+    "website": "http://www.alstom.com/",
+    "types": "company",
+    "status": "active",
+    "country": "United Kingdom",
+    "city": "London",
+    "established": "1928",
+    "relationships": "parent: https://ror.org/00t4db855"
+  },
+  {
+    "id": "023znxa73",
+    "full_id": "https://ror.org/023znxa73",
+    "name": "St Petersburg University",
+    "lat": 59.93863,
+    "lng": 30.31413,
+    "website": "http://spbu.ru/",
+    "types": "education; funder",
+    "status": "active",
+    "country": "Russia",
+    "city": "St Petersburg",
+    "established": "1724",
+    "relationships": ""
+  },
+  {
+    "id": "02e8hzf44",
+    "full_id": "https://ror.org/02e8hzf44",
+    "name": "Helsinki University Hospital",
+    "lat": 60.16952,
+    "lng": 24.93545,
+    "website": "http://www.hus.fi/en/Pages/default.aspx",
+    "types": "healthcare; funder",
+    "status": "active",
+    "country": "Finland",
+    "city": "Helsinki",
+    "established": "1966",
+    "relationships": "child: https://ror.org/00dqfzf20, https://ror.org/03kpa7r53, https://ror.org/03y1rev40, https://ror.org/05fscjm95, https://ror.org/03ee58b76, https://ror.org/03a1rt493, https://ror.org/003qr7703, https://ror.org/058ma0d84; parent: https://ror.org/020cpqb94; related: https://ror.org/040af2s02"
+  },
+  {
+    "id": "02s6w8y22",
+    "full_id": "https://ror.org/02s6w8y22",
+    "name": "University of Bamako",
+    "lat": 12.65,
+    "lng": -8,
+    "website": "http://um.edu.ml/",
+    "types": "education",
+    "status": "active",
+    "country": "Mali",
+    "city": "Bamako",
+    "established": "1996",
+    "relationships": ""
+  },
+  {
+    "id": "01h89k731",
+    "full_id": "https://ror.org/01h89k731",
+    "name": "TXT e-solutions (Italy)",
+    "lat": 45.46427,
+    "lng": 9.18951,
+    "website": "http://www.txtgroup.com/",
+    "types": "company",
+    "status": "active",
+    "country": "Italy",
+    "city": "Milan",
+    "established": "1989",
+    "relationships": ""
+  },
+  {
+    "id": "05ryv0s68",
+    "full_id": "https://ror.org/05ryv0s68",
+    "name": "Euresearch Association",
+    "lat": 46.94809,
+    "lng": 7.44744,
+    "website": "https://www.euresearch.ch/en/",
+    "types": "other",
+    "status": "active",
+    "country": "Switzerland",
+    "city": "Bern",
+    "established": "2004",
+    "relationships": ""
+  },
+  {
+    "id": "05sep9w93",
+    "full_id": "https://ror.org/05sep9w93",
+    "name": "Instituto Tecnológico de Aragón",
+    "lat": 41.65606,
+    "lng": -0.87734,
+    "website": "http://www.itainnova.es/en/",
+    "types": "other",
+    "status": "active",
+    "country": "Spain",
+    "city": "Zaragoza",
+    "established": "1984",
+    "relationships": ""
+  },
+  {
+    "id": "022em3k58",
+    "full_id": "https://ror.org/022em3k58",
+    "name": "de Duve Institute",
+    "lat": 50.85045,
+    "lng": 4.34878,
+    "website": "https://www.deduveinstitute.be/",
+    "types": "facility",
+    "status": "active",
+    "country": "Belgium",
+    "city": "Brussels",
+    "established": "1974",
+    "relationships": ""
+  },
+  {
+    "id": "0284gmm72",
+    "full_id": "https://ror.org/0284gmm72",
+    "name": "Cité Internationale Universitaire de Paris",
+    "lat": 48.85341,
+    "lng": 2.3488,
+    "website": "http://www.ciup.fr/en/",
+    "types": "other",
+    "status": "active",
+    "country": "France",
+    "city": "Paris",
+    "established": "1925",
+    "relationships": ""
+  },
+  {
+    "id": "04esata81",
+    "full_id": "https://ror.org/04esata81",
+    "name": "European Science Foundation",
+    "lat": 48.58392,
+    "lng": 7.74553,
+    "website": "http://www.esf.org/",
+    "types": "nonprofit; funder",
+    "status": "active",
+    "country": "France",
+    "city": "Strasbourg",
+    "established": "1974",
+    "relationships": ""
+  },
+  {
+    "id": "02cqgeg62",
+    "full_id": "https://ror.org/02cqgeg62",
+    "name": "INRA Transfert (France)",
+    "lat": 48.85341,
+    "lng": 2.3488,
+    "website": "http://www.inra-transfert.fr/en/",
+    "types": "company",
+    "status": "active",
+    "country": "France",
+    "city": "Paris",
+    "established": "2001",
+    "relationships": ""
+  },
+  {
+    "id": "03bvx5w91",
+    "full_id": "https://ror.org/03bvx5w91",
+    "name": "Fondazione Eni Enrico Mattei",
+    "lat": 45.46427,
+    "lng": 9.18951,
+    "website": "http://www.feem.it/",
+    "types": "nonprofit",
+    "status": "active",
+    "country": "Italy",
+    "city": "Milan",
+    "established": "1989",
+    "relationships": ""
+  },
+  {
+    "id": "0204pdj19",
+    "full_id": "https://ror.org/0204pdj19",
+    "name": "Institute For European Environmental Policy",
+    "lat": 51.50853,
+    "lng": -0.12574,
+    "website": "http://www.ieep.eu/",
+    "types": "nonprofit",
+    "status": "active",
+    "country": "United Kingdom",
+    "city": "London",
+    "established": "1976",
+    "relationships": ""
+  },
+  {
+    "id": "027tvqf96",
+    "full_id": "https://ror.org/027tvqf96",
+    "name": "CAS Software (Germany)",
+    "lat": 49.00937,
+    "lng": 8.40444,
+    "website": "http://www.cas.de/en/homepage.html",
+    "types": "company",
+    "status": "active",
+    "country": "Germany",
+    "city": "Karlsruhe",
+    "established": "1986",
+    "relationships": ""
+  },
+  {
+    "id": "04qcftj32",
+    "full_id": "https://ror.org/04qcftj32",
+    "name": "UK Health and Environment Research Institute",
+    "lat": 52.76588,
+    "lng": -0.88693,
+    "website": "http://www.uk-heri.org/",
+    "types": "facility",
+    "status": "active",
+    "country": "United Kingdom",
+    "city": "Melton Mowbray",
+    "established": "",
+    "relationships": ""
+  },
+  {
+    "id": "01cqx0m58",
+    "full_id": "https://ror.org/01cqx0m58",
+    "name": "Italian Aerospace Research Centre",
+    "lat": 41.10519,
+    "lng": 14.21269,
+    "website": "http://www.cira.it/en",
+    "types": "other",
+    "status": "active",
+    "country": "Italy",
+    "city": "Capua",
+    "established": "1984",
+    "relationships": ""
+  },
+  {
+    "id": "04grcvp20",
+    "full_id": "https://ror.org/04grcvp20",
+    "name": "Ingenieria Y Economia Del Transporte",
+    "lat": 40.4165,
+    "lng": -3.70256,
+    "website": "https://www.ineco.com/webineco/",
+    "types": "company",
+    "status": "active",
+    "country": "Spain",
+    "city": "Madrid",
+    "established": "1968",
+    "relationships": ""
+  },
+  {
+    "id": "04pd9b824",
+    "full_id": "https://ror.org/04pd9b824",
+    "name": "Doosan (United Kingdom)",
+    "lat": 55.87197,
+    "lng": -4.39253,
+    "website": "https://www.doosan.com/en",
+    "types": "company",
+    "status": "active",
+    "country": "United Kingdom",
+    "city": "Renfrew",
+    "established": "1896",
+    "relationships": "parent: https://ror.org/011kvxd26"
+  },
+  {
+    "id": "05jeza980",
+    "full_id": "https://ror.org/05jeza980",
+    "name": "Rolls-Royce (Germany)",
+    "lat": 52.52437,
+    "lng": 13.41053,
+    "website": "http://www.rolls-royce.com/",
+    "types": "company",
+    "status": "active",
+    "country": "Germany",
+    "city": "Berlin",
+    "established": "1904",
+    "relationships": "parent: https://ror.org/04h08p482"
+  },
+  {
+    "id": "010jx2260",
+    "full_id": "https://ror.org/010jx2260",
+    "name": "National Institute of Agricultural Botany",
+    "lat": 52.2,
+    "lng": 0.11667,
+    "website": "http://www.niab.com/",
+    "types": "facility; funder",
+    "status": "active",
+    "country": "United Kingdom",
+    "city": "Cambridge",
+    "established": "1919",
+    "relationships": ""
+  },
+  {
+    "id": "01cqmqj90",
+    "full_id": "https://ror.org/01cqmqj90",
+    "name": "Hadassah Medical Center",
+    "lat": 31.76904,
+    "lng": 35.21633,
+    "website": "http://www.hadassah-med.com/",
+    "types": "healthcare; funder",
+    "status": "active",
+    "country": "Israel",
+    "city": "Jerusalem",
+    "established": "1934",
+    "relationships": "related: https://ror.org/03qxff017"
+  },
+  {
+    "id": "02ejsvn42",
+    "full_id": "https://ror.org/02ejsvn42",
+    "name": "European Committee for Standardization",
+    "lat": 50.85045,
+    "lng": 4.34878,
+    "website": "https://www.cen.eu/Pages/default.aspx",
+    "types": "nonprofit",
+    "status": "active",
+    "country": "Belgium",
+    "city": "Brussels",
+    "established": "1961",
+    "relationships": ""
+  },
+  {
+    "id": "00582g326",
+    "full_id": "https://ror.org/00582g326",
+    "name": "Indian Institute of Technology Roorkee",
+    "lat": 29.86632,
+    "lng": 77.89118,
+    "website": "http://www.iitr.ac.in/",
+    "types": "education; funder",
+    "status": "active",
+    "country": "India",
+    "city": "Roorkee",
+    "established": "1847",
+    "relationships": ""
+  },
+  {
+    "id": "03dsc8d33",
+    "full_id": "https://ror.org/03dsc8d33",
+    "name": "Systems, Applications & Products in Data Processing (Germany)",
+    "lat": 49.30637,
+    "lng": 8.64236,
+    "website": "http://go.sap.com/index.html",
+    "types": "company",
+    "status": "active",
+    "country": "Germany",
+    "city": "Walldorf",
+    "established": "1972",
+    "relationships": "child: https://ror.org/04c2m5174, https://ror.org/025jhd967, https://ror.org/036z4j470, https://ror.org/04k7gd586, https://ror.org/01gbhv690, https://ror.org/02xsf1j07"
+  },
+  {
+    "id": "01nthrq77",
+    "full_id": "https://ror.org/01nthrq77",
+    "name": "Instituto Tecnologico Del Embalaje, Transporte Y Logistica",
+    "lat": 39.50263,
+    "lng": -0.44079,
+    "website": "http://www.itene.com/en",
+    "types": "facility",
+    "status": "active",
+    "country": "Spain",
+    "city": "Paterna",
+    "established": "1994",
+    "relationships": ""
+  },
+  {
+    "id": "03vnshb93",
+    "full_id": "https://ror.org/03vnshb93",
+    "name": "Transport for London",
+    "lat": 51.50853,
+    "lng": -0.12574,
+    "website": "https://tfl.gov.uk/",
+    "types": "government",
+    "status": "active",
+    "country": "United Kingdom",
+    "city": "London",
+    "established": "2000",
+    "relationships": "child: https://ror.org/01tqv6s24; parent: https://ror.org/04g0aqp14"
+  },
+  {
+    "id": "0108e1t34",
+    "full_id": "https://ror.org/0108e1t34",
+    "name": "Applied Research and Communications Fund",
+    "lat": 42.69751,
+    "lng": 23.32415,
+    "website": "http://www.arcfund.net/",
+    "types": "other",
+    "status": "active",
+    "country": "Bulgaria",
+    "city": "Sofia",
+    "established": "1991",
+    "relationships": ""
+  },
+  {
+    "id": "05efsr055",
+    "full_id": "https://ror.org/05efsr055",
+    "name": "Estonian Interuniversity Population Research Centre",
+    "lat": 59.43696,
+    "lng": 24.75353,
+    "website": "http://www.popest.ee/node/23",
+    "types": "facility",
+    "status": "active",
+    "country": "Estonia",
+    "city": "Tallinn",
+    "established": "1986",
+    "relationships": "related: https://ror.org/05mey9k78"
+  },
+  {
+    "id": "00knyd990",
+    "full_id": "https://ror.org/00knyd990",
+    "name": "UK Intelligent Systems Research Institute",
+    "lat": 52.76588,
+    "lng": -0.88693,
+    "website": "http://www.uk-isri.org/",
+    "types": "facility",
+    "status": "active",
+    "country": "United Kingdom",
+    "city": "Melton Mowbray",
+    "established": "2007",
+    "relationships": ""
+  },
+  {
+    "id": "05jxj5k51",
+    "full_id": "https://ror.org/05jxj5k51",
+    "name": "Eesti Innovatsiooni Instituut",
+    "lat": 59.43696,
+    "lng": 24.75353,
+    "website": "http://www.eii.ee/",
+    "types": "company",
+    "status": "active",
+    "country": "Estonia",
+    "city": "Tallinn",
+    "established": "2005",
+    "relationships": ""
+  },
+  {
+    "id": "02s0xcm55",
+    "full_id": "https://ror.org/02s0xcm55",
+    "name": "Agenzia per la Promozione della Ricerca Europea",
+    "lat": 41.89193,
+    "lng": 12.51133,
+    "website": "http://www.apre.it/en",
+    "types": "nonprofit",
+    "status": "active",
+    "country": "Italy",
+    "city": "Rome",
+    "established": "1989",
+    "relationships": ""
+  },
+  {
+    "id": "04f4syj68",
+    "full_id": "https://ror.org/04f4syj68",
+    "name": "Polo Universitario Città di Prato",
+    "lat": 43.8805,
+    "lng": 11.09699,
+    "website": "http://www.poloprato.unifi.it/en/home-polo.html?no_cache=1",
+    "types": "education",
+    "status": "active",
+    "country": "Italy",
+    "city": "Prato",
+    "established": "1990",
+    "relationships": ""
+  },
+  {
+    "id": "02wdp5k87",
+    "full_id": "https://ror.org/02wdp5k87",
+    "name": "Keskuslaboratorio",
+    "lat": 60.2052,
+    "lng": 24.6522,
+    "website": "http://www.kcl.fi/",
+    "types": "company",
+    "status": "active",
+    "country": "Finland",
+    "city": "Espoo",
+    "established": "1916",
+    "relationships": ""
+  },
+  {
+    "id": "04cnfrn26",
+    "full_id": "https://ror.org/04cnfrn26",
+    "name": "University of the Arts London",
+    "lat": 51.50853,
+    "lng": -0.12574,
+    "website": "http://www.arts.ac.uk/",
+    "types": "education; funder",
+    "status": "active",
+    "country": "United Kingdom",
+    "city": "London",
+    "established": "1986",
+    "relationships": ""
+  },
+  {
+    "id": "03px4ez74",
+    "full_id": "https://ror.org/03px4ez74",
+    "name": "Zoological Society of London",
+    "lat": 51.50853,
+    "lng": -0.12574,
+    "website": "http://www.zsl.org/",
+    "types": "nonprofit; funder",
+    "status": "active",
+    "country": "United Kingdom",
+    "city": "London",
+    "established": "1826",
+    "relationships": ""
+  },
+  {
+    "id": "05rtvan68",
+    "full_id": "https://ror.org/05rtvan68",
+    "name": "Royal University of Phnom Penh",
+    "lat": 11.56245,
+    "lng": 104.91601,
+    "website": "http://www.rupp.edu.kh/",
+    "types": "education",
+    "status": "active",
+    "country": "Cambodia",
+    "city": "Phnom Penh",
+    "established": "1960",
+    "relationships": ""
+  },
+  {
+    "id": "019621n74",
+    "full_id": "https://ror.org/019621n74",
+    "name": "Public Health Institute",
+    "lat": 37.80437,
+    "lng": -122.2708,
+    "website": "http://www.phi.org/",
+    "types": "healthcare; funder",
+    "status": "active",
+    "country": "United States",
+    "city": "Oakland",
+    "established": "",
+    "relationships": ""
+  },
+  {
+    "id": "04v403p80",
+    "full_id": "https://ror.org/04v403p80",
+    "name": "Interuniversity Consortium for Magnetic Resonance",
+    "lat": 43.83193,
+    "lng": 11.19924,
+    "website": "http://www.cerm.unifi.it/cirmmp",
+    "types": "education",
+    "status": "active",
+    "country": "Italy",
+    "city": "Sesto Fiorentino",
+    "established": "1994",
+    "relationships": ""
+  },
+  {
+    "id": "02m11x738",
+    "full_id": "https://ror.org/02m11x738",
+    "name": "Furtwangen University",
+    "lat": 48.05156,
+    "lng": 8.20715,
+    "website": "http://en.hs-furtwangen.de/",
+    "types": "education",
+    "status": "active",
+    "country": "Germany",
+    "city": "Furtwangen im Schwarzwald",
+    "established": "1850",
+    "relationships": ""
+  },
+  {
+    "id": "00r2gde63",
+    "full_id": "https://ror.org/00r2gde63",
+    "name": "Ascamm Technologic Center",
+    "lat": 41.49109,
+    "lng": 2.14079,
+    "website": "http://www.ascamm.com/en/",
+    "types": "facility",
+    "status": "active",
+    "country": "Spain",
+    "city": "Cerdanyola del Vallès",
+    "established": "1987",
+    "relationships": ""
+  },
+  {
+    "id": "033t8gt11",
+    "full_id": "https://ror.org/033t8gt11",
+    "name": "University of Forestry",
+    "lat": 42.69751,
+    "lng": 23.32415,
+    "website": "https://ltu.bg",
+    "types": "education",
+    "status": "active",
+    "country": "Bulgaria",
+    "city": "Sofia",
+    "established": "1953",
+    "relationships": ""
+  },
+  {
+    "id": "03zrwm897",
+    "full_id": "https://ror.org/03zrwm897",
+    "name": "Technical University of Varna",
+    "lat": 43.21667,
+    "lng": 27.91667,
+    "website": "http://new.tu-varna.bg/en/index.php/bg/",
+    "types": "education",
+    "status": "active",
+    "country": "Bulgaria",
+    "city": "Varna",
+    "established": "1962",
+    "relationships": ""
+  },
+  {
+    "id": "00c051916",
+    "full_id": "https://ror.org/00c051916",
+    "name": "Centre Technique des Industries Mécaniques",
+    "lat": 49.20724,
+    "lng": 2.58661,
+    "website": "http://www.cetim.fr/en",
+    "types": "other; funder",
+    "status": "active",
+    "country": "France",
+    "city": "Senlis",
+    "established": "1965",
+    "relationships": ""
+  },
+  {
+    "id": "0238gz740",
+    "full_id": "https://ror.org/0238gz740",
+    "name": "Institute for Theoretical and Experimental Physics",
+    "lat": 55.75222,
+    "lng": 37.61556,
+    "website": "http://www.itep.ru/eng/",
+    "types": "education",
+    "status": "active",
+    "country": "Russia",
+    "city": "Moscow",
+    "established": "1945",
+    "relationships": ""
+  },
+  {
+    "id": "051qv3667",
+    "full_id": "https://ror.org/051qv3667",
+    "name": "Applus+ IDIADA (Spain)",
+    "lat": 41.25357,
+    "lng": 1.55086,
+    "website": "http://www.applusidiada.com/en/",
+    "types": "company",
+    "status": "active",
+    "country": "Spain",
+    "city": "Santa Oliva",
+    "established": "1971",
+    "relationships": "child: https://ror.org/00k5yxn79, https://ror.org/04c4wb253"
+  },
+  {
+    "id": "001c9fg13",
+    "full_id": "https://ror.org/001c9fg13",
+    "name": "Unitatea Executiva Pentru Finantarea Invatamantului Superior Si A Cercetarii Stiintifice Universitare",
+    "lat": 44.43225,
+    "lng": 26.10626,
+    "website": "http://www.uefiscsu.ro/",
+    "types": "government",
+    "status": "active",
+    "country": "Romania",
+    "city": "Bucharest",
+    "established": "2010",
+    "relationships": "parent: https://ror.org/035rrps97"
+  },
+  {
+    "id": "006c1jc70",
+    "full_id": "https://ror.org/006c1jc70",
+    "name": "UK Material Technology Research Institute",
+    "lat": 52.76588,
+    "lng": -0.88693,
+    "website": "",
+    "types": "facility",
+    "status": "active",
+    "country": "United Kingdom",
+    "city": "Melton Mowbray",
+    "established": "",
+    "relationships": ""
+  },
+  {
+    "id": "00fbafs03",
+    "full_id": "https://ror.org/00fbafs03",
+    "name": "MBN Nanomaterialia (Italy)",
+    "lat": 45.69182,
+    "lng": 12.28255,
+    "website": "http://www.mbn.it/eng/",
+    "types": "company",
+    "status": "active",
+    "country": "Italy",
+    "city": "Carbonera",
+    "established": "1994",
+    "relationships": ""
+  },
+  {
+    "id": "04evcxq23",
+    "full_id": "https://ror.org/04evcxq23",
+    "name": "Consorzio Nazionale Interuniversitario per i Trasporti e la Logistica",
+    "lat": 41.89193,
+    "lng": 12.51133,
+    "website": "http://www.nitel.it/eng/",
+    "types": "other",
+    "status": "active",
+    "country": "Italy",
+    "city": "Rome",
+    "established": "2003",
+    "relationships": ""
+  },
+  {
+    "id": "026452768",
+    "full_id": "https://ror.org/026452768",
+    "name": "PTV Group (Germany)",
+    "lat": 49.00937,
+    "lng": 8.40444,
+    "website": "https://www.ptvgroup.com/en/welcome-to-the-ptv-group/",
+    "types": "company",
+    "status": "active",
+    "country": "Germany",
+    "city": "Karlsruhe",
+    "established": "1979",
+    "relationships": ""
+  },
+  {
+    "id": "04svdmv30",
+    "full_id": "https://ror.org/04svdmv30",
+    "name": "Union des Industries Ferroviaires Européennes",
+    "lat": 50.85045,
+    "lng": 4.34878,
+    "website": "http://www.unife.org/",
+    "types": "other",
+    "status": "active",
+    "country": "Belgium",
+    "city": "Brussels",
+    "established": "1991",
+    "relationships": ""
+  },
+  {
+    "id": "000a2sx58",
+    "full_id": "https://ror.org/000a2sx58",
+    "name": "Centre for European Policy Studies",
+    "lat": 50.85045,
+    "lng": 4.34878,
+    "website": "http://www.ceps.eu/",
+    "types": "nonprofit",
+    "status": "active",
+    "country": "Belgium",
+    "city": "Brussels",
+    "established": "1983",
+    "relationships": ""
+  },
+  {
+    "id": "04ejkkg63",
+    "full_id": "https://ror.org/04ejkkg63",
+    "name": "Ecologic Institute",
+    "lat": 52.52437,
+    "lng": 13.41053,
+    "website": "http://www.ecologic.eu/",
+    "types": "nonprofit",
+    "status": "active",
+    "country": "Germany",
+    "city": "Berlin",
+    "established": "1995",
+    "relationships": ""
+  },
+  {
+    "id": "04hp86393",
+    "full_id": "https://ror.org/04hp86393",
+    "name": "National Grid (United Kingdom)",
+    "lat": 51.50853,
+    "lng": -0.12574,
+    "website": "https://www.nationalgrid.com/",
+    "types": "company",
+    "status": "active",
+    "country": "United Kingdom",
+    "city": "London",
+    "established": "1990",
+    "relationships": "child: https://ror.org/04vdxde73"
+  },
+  {
+    "id": "00ae33288",
+    "full_id": "https://ror.org/00ae33288",
+    "name": "London Metropolitan University",
+    "lat": 51.50853,
+    "lng": -0.12574,
+    "website": "http://www.londonmet.ac.uk/",
+    "types": "education; funder",
+    "status": "active",
+    "country": "United Kingdom",
+    "city": "London",
+    "established": "2002",
+    "relationships": "child: https://ror.org/042nfvn15"
+  },
+  {
+    "id": "017vgxg86",
+    "full_id": "https://ror.org/017vgxg86",
+    "name": "Ford (Germany)",
+    "lat": 50.93333,
+    "lng": 6.95,
+    "website": "http://www.ford.de/",
+    "types": "company",
+    "status": "active",
+    "country": "Germany",
+    "city": "Cologne",
+    "established": "1925",
+    "relationships": ""
+  },
+  {
+    "id": "05s7s9x02",
+    "full_id": "https://ror.org/05s7s9x02",
+    "name": "Lucideon (United Kingdom)",
+    "lat": 53.00415,
+    "lng": -2.18538,
+    "website": "http://www.lucideon.com/",
+    "types": "company",
+    "status": "active",
+    "country": "United Kingdom",
+    "city": "Stoke-on-Trent",
+    "established": "1948",
+    "relationships": ""
+  },
+  {
+    "id": "00mbaq869",
+    "full_id": "https://ror.org/00mbaq869",
+    "name": "Timescape Surveys",
+    "lat": 54.97328,
+    "lng": -1.61396,
+    "website": "http://www.timescapes.leeds.ac.uk/",
+    "types": "other",
+    "status": "active",
+    "country": "United Kingdom",
+    "city": "Newcastle upon Tyne",
+    "established": "2007",
+    "relationships": "related: https://ror.org/024mrxd33"
+  },
+  {
+    "id": "05k87vq12",
+    "full_id": "https://ror.org/05k87vq12",
+    "name": "Microsoft Research (United Kingdom)",
+    "lat": 52.2,
+    "lng": 0.11667,
+    "website": "http://research.microsoft.com/en-us/labs/cambridge/default.aspx",
+    "types": "company",
+    "status": "active",
+    "country": "United Kingdom",
+    "city": "Cambridge",
+    "established": "1997",
+    "relationships": "child: https://ror.org/04kcgyj43; parent: https://ror.org/00d0nc645; related: https://ror.org/02w7f3w92"
+  },
+  {
+    "id": "05tkvpg69",
+    "full_id": "https://ror.org/05tkvpg69",
+    "name": "Centro Agronomico Tropical de Investigacion y Ensenanza Catie",
+    "lat": 9.90371,
+    "lng": -83.68361,
+    "website": "http://www.catie.ac.cr/en/",
+    "types": "education",
+    "status": "active",
+    "country": "Costa Rica",
+    "city": "Turrialba",
+    "established": "1942",
+    "relationships": ""
+  },
+  {
+    "id": "013q2cj53",
+    "full_id": "https://ror.org/013q2cj53",
+    "name": "Universeum",
+    "lat": 57.70716,
+    "lng": 11.96679,
+    "website": "http://www.universeum.se/sv/",
+    "types": "archive",
+    "status": "active",
+    "country": "Sweden",
+    "city": "Gothenburg",
+    "established": "2001",
+    "relationships": ""
+  },
+  {
+    "id": "05g4mtv59",
+    "full_id": "https://ror.org/05g4mtv59",
+    "name": "Hewlett-Packard (United Kingdom)",
+    "lat": 51.41363,
+    "lng": -0.75054,
+    "website": "http://www8.hp.com/uk/en/home.html",
+    "types": "company",
+    "status": "active",
+    "country": "United Kingdom",
+    "city": "Bracknell",
+    "established": "1939",
+    "relationships": "parent: https://ror.org/059rn9488"
+  },
+  {
+    "id": "026vvkz19",
+    "full_id": "https://ror.org/026vvkz19",
+    "name": "National Interuniversity Consortium for the Physical Sciences of Matter",
+    "lat": 41.89193,
+    "lng": 12.51133,
+    "website": "http://www.cnism.it/web/it",
+    "types": "nonprofit",
+    "status": "active",
+    "country": "Italy",
+    "city": "Rome",
+    "established": "2005",
+    "relationships": ""
+  },
+  {
+    "id": "006kce638",
+    "full_id": "https://ror.org/006kce638",
+    "name": "Instituto Tecnológico del Calzado y Conexas",
+    "lat": 38.47783,
+    "lng": -0.79157,
+    "website": "http://www.inescop.es/",
+    "types": "other",
+    "status": "active",
+    "country": "Spain",
+    "city": "Elda",
+    "established": "1971",
+    "relationships": ""
+  },
+  {
+    "id": "051a97h21",
+    "full_id": "https://ror.org/051a97h21",
+    "name": "National Nuclear Corporation (United Kingdom)",
+    "lat": 53.30289,
+    "lng": -2.37482,
+    "website": "",
+    "types": "company",
+    "status": "active",
+    "country": "United Kingdom",
+    "city": "Knutsford",
+    "established": "1988",
+    "relationships": ""
+  }
+];
+
+        let map, markerCluster, baseLayerControl;
+        let totalOrganizations = 0;
+        let filteredOrganizations = [];
+        let spatialSelectionLayer = null;
+        let spatialDrawLayerGroup = null;
+        let currentModalOrg = null;
+        let orgIndexById = new Map();
+        let stringPool = new Map();
+
+        function stripLocalePrefix(value) {
+            const match = (value || '').trim().match(/^(?:[a-z]{2,3}|no_lang_code)\s*:\s*(.+)$/i);
+            return match ? match[1].trim() : (value || '').trim();
+        }
+
+        function createCsvOrganizationParser(onOrganization) {
+            let field = '';
+            let row = [];
+            let inQuotes = false;
+            let headersInitialized = false;
+            let headerIndex = null;
+
+            const buildHeaderIndex = headerRow => {
+                const map = Object.create(null);
+                headerRow.forEach((header, index) => {
+                    const key = String(header || '').replace(/^\uFEFF/, '').trim();
+                    if (key) map[key] = index;
+                });
+                return map;
+            };
+
+            const valueFor = (fields, key) => {
+                if (!headerIndex || !(key in headerIndex)) return '';
+                const value = fields[headerIndex[key]];
+                return typeof value === 'string' ? value.trim() : '';
+            };
+
+            const addRow = () => {
+                if (!row.length) {
+                    return;
+                }
+
+                if (!headersInitialized) {
+                    headerIndex = buildHeaderIndex(row);
+                    headersInitialized = true;
+                    row = [];
+                    return;
+                }
+
+                const id = valueFor(row, 'id');
+                if (!id) {
+                    row = [];
+                    return;
+                }
+
+                const rawName = valueFor(row, 'names.types.ror_display');
+                const fallbackName = valueFor(row, 'names.types.label') || valueFor(row, 'names.types.alias');
+                const lat = Number(valueFor(row, 'locations.geonames_details.lat'));
+                const lng = Number(valueFor(row, 'locations.geonames_details.lng'));
+
+                if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+                    row = [];
+                    return;
+                }
+
+                const established = valueFor(row, 'established');
+                const establishedYear = Number.parseInt(established, 10);
+
+                onOrganization({
+                    id: id.replace(/^https?:\/\/ror\.org\//i, ''),
+                    name: stripLocalePrefix(rawName) || stripLocalePrefix(fallbackName) || id,
+                    lat,
+                    lng,
+                    website: valueFor(row, 'links.type.website'),
+                    types: valueFor(row, 'types'),
+                    status: valueFor(row, 'status'),
+                    country: valueFor(row, 'locations.geonames_details.country_name'),
+                    city: valueFor(row, 'locations.geonames_details.name'),
+                    established,
+                    establishedYear: Number.isInteger(establishedYear) ? establishedYear : null,
+                    relationships: valueFor(row, 'relationships')
+                });
+
+                row = [];
+            };
+
+            const consume = text => {
+                for (let i = 0; i < text.length; i++) {
+                    const char = text[i];
+
+                    if (char === '"') {
+                        if (inQuotes && text[i + 1] === '"') {
+                            field += '"';
+                            i += 1;
+                        } else {
+                            inQuotes = !inQuotes;
+                        }
+                        continue;
+                    }
+
+                    if (!inQuotes && (char === ',' || char === '\n' || char === '\r')) {
+                        row.push(field);
+                        field = '';
+
+                        if (char !== ',') {
+                            addRow();
+                            if (char === '\r' && text[i + 1] === '\n') {
+                                i += 1;
+                            }
+                        }
+
+                        continue;
+                    }
+
+                    field += char;
+                }
+            };
+
+            const finish = () => {
+                if (field.length > 0 || row.length > 0) {
+                    row.push(field);
+                    addRow();
+                }
+            };
+
+            return { consume, finish };
+        }
+
+        function parseCsvOrganizations(csvText) {
+            const text = String(csvText || '');
+            if (!text.trim()) return [];
+
+            const organizationsFromCsv = [];
+            const parser = createCsvOrganizationParser(org => organizationsFromCsv.push(org));
+            parser.consume(text);
+            parser.finish();
+            return organizationsFromCsv;
+        }
+
+        async function parseCsvOrganizationsFromFile(file) {
+            const organizationsFromCsv = [];
+            const parser = createCsvOrganizationParser(org => organizationsFromCsv.push(org));
+            const decoder = new TextDecoder();
+            const reader = file.stream().getReader();
+
+            try {
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    parser.consume(decoder.decode(value, { stream: true }));
+                }
+                parser.consume(decoder.decode());
+                parser.finish();
+            } finally {
+                reader.releaseLock();
+            }
+
+            return organizationsFromCsv;
+        }
+
+        function replaceOrganizations(parsed) {
+            if (!parsed.length) return false;
+
+            document.getElementById('filter-form').reset();
+            organizations = compactOrganizations(parsed);
+            rebuildMarkers();
+            return true;
+        }
+
+        function loadOrganizationsFromCsv(text) {
+            return replaceOrganizations(parseCsvOrganizations(text));
+        }
+
+        async function loadOrganizationsFromFile(file) {
+            return replaceOrganizations(await parseCsvOrganizationsFromFile(file));
+        }
+
+        function rebuildMarkers() {
+            markerCluster.clearLayers();
+            totalOrganizations = 0;
+            orgIndexById = new Map();
+            organizations.forEach((org, index) => {
+                if (Number.isFinite(org.lat) && Number.isFinite(org.lng)) totalOrganizations++;
+                const normalizedId = normalizeRorId(org.id);
+                if (normalizedId) orgIndexById.set(normalizedId, index);
+            });
+
+            createFilterOptions();
+            applyFilters();
+        }
+
+        function setupUpload() {
+            const input = document.getElementById('csv-upload');
+            const status = document.getElementById('csv-upload-status');
+            const spinner = document.getElementById('csv-upload-spinner');
+            const setUploading = uploading => {
+                spinner.hidden = !uploading;
+                input.disabled = uploading;
+            };
+
+            input.addEventListener('change', async event => {
+                const file = event.target.files && event.target.files[0];
+                if (!file) {
+                    setUploading(false);
+                    status.textContent = 'Select a CSV file to load.';
+                    return;
+                }
+
+                if (!(file.type === 'text/csv' || file.name.toLowerCase().endsWith('.csv'))) {
+                    setUploading(false);
+                    status.textContent = 'Please choose a CSV file.';
+                    return;
+                }
+
+                setUploading(true);
+                status.textContent = `Loading ${file.name}...`;
+                try {
+                    let ok = false;
+                    if (typeof file.stream === 'function' && typeof TextDecoder !== 'undefined') {
+                        ok = await loadOrganizationsFromFile(file);
+                    } else {
+                        const text = await file.text();
+                        ok = loadOrganizationsFromCsv(text);
+                    }
+                    setUploading(false);
+                    if (!ok) {
+                        status.textContent = 'Could not parse valid records from the uploaded file.';
+                        return;
+                    }
+
+                    status.textContent = `Loaded ${organizations.length} organization(s) from ${file.name}`;
+                } catch (error) {
+                    setUploading(false);
+                    status.textContent = 'Failed to read the selected file.';
+                }
+            });
+        }
+
+        function getTypes(org) {
+            return (org.types || '')
+                .split(';')
+                .map(value => value.trim())
+                .filter(Boolean);
+        }
+
+        function normalize(text) {
+            return (text || '').toLowerCase().trim();
+        }
+
+        function syncYearSlidersFromInputs() {
+            const minYear = 1000;
+            const maxYear = 2099;
+            const fromInput = document.getElementById('filter-year-from');
+            const toInput = document.getElementById('filter-year-to');
+            const fromSlider = document.getElementById('filter-year-from-slider');
+            const toSlider = document.getElementById('filter-year-to-slider');
+
+            const parsedFrom = Number.parseInt(fromInput.value, 10);
+            const parsedTo = Number.parseInt(toInput.value, 10);
+            const fromYear = Number.isInteger(parsedFrom) ? Math.max(minYear, Math.min(maxYear, parsedFrom)) : minYear;
+            const toYear = Number.isInteger(parsedTo) ? Math.max(minYear, Math.min(maxYear, parsedTo)) : maxYear;
+            const safeFrom = Math.min(fromYear, toYear);
+            const safeTo = Math.max(fromYear, toYear);
+
+            fromSlider.max = String(safeTo);
+            toSlider.min = String(safeFrom);
+            fromSlider.value = String(safeFrom);
+            toSlider.value = String(safeTo);
+        }
+
+        function attachYearSliderEvents() {
+            const fromInput = document.getElementById('filter-year-from');
+            const toInput = document.getElementById('filter-year-to');
+            const fromSlider = document.getElementById('filter-year-from-slider');
+            const toSlider = document.getElementById('filter-year-to-slider');
+
+            const applyFromSlider = () => {
+                const fromValue = Number.parseInt(fromSlider.value, 10);
+                const toValue = Number.parseInt(toSlider.value, 10);
+                if (Number.isInteger(fromValue) && Number.isInteger(toValue) && fromValue > toValue) {
+                    toSlider.value = String(fromValue);
+                    toInput.value = String(fromValue);
+                }
+                fromInput.value = fromSlider.value;
+                syncYearSlidersFromInputs();
+                applyFilters();
+            };
+
+            const applyToSlider = () => {
+                const fromValue = Number.parseInt(fromSlider.value, 10);
+                const toValue = Number.parseInt(toSlider.value, 10);
+                if (Number.isInteger(fromValue) && Number.isInteger(toValue) && toValue < fromValue) {
+                    fromSlider.value = String(toValue);
+                    fromInput.value = String(toValue);
+                }
+                toInput.value = toSlider.value;
+                syncYearSlidersFromInputs();
+                applyFilters();
+            };
+
+            fromSlider.addEventListener('input', applyFromSlider);
+            fromSlider.addEventListener('change', applyFromSlider);
+            toSlider.addEventListener('input', applyToSlider);
+            toSlider.addEventListener('change', applyToSlider);
+
+            fromInput.addEventListener('input', syncYearSlidersFromInputs);
+            fromInput.addEventListener('change', syncYearSlidersFromInputs);
+            toInput.addEventListener('input', syncYearSlidersFromInputs);
+            toInput.addEventListener('change', syncYearSlidersFromInputs);
+
+            syncYearSlidersFromInputs();
+        }
+
+        function internString(value) {
+            const text = String(value || '').trim();
+            if (!text) return '';
+            const existing = stringPool.get(text);
+            if (existing) return existing;
+            stringPool.set(text, text);
+            return text;
+        }
+
+        function compactOrganizations(source) {
+            stringPool = new Map();
+            return source.map(org => {
+                const id = normalizeRorId(org.id) || internString(org.id);
+                const establishedText = internString(org.established);
+                const parsedYear = Number.parseInt(establishedText, 10);
+                return {
+                    id,
+                    name: internString(org.name) || id,
+                    lat: Number(org.lat),
+                    lng: Number(org.lng),
+                    website: internString(org.website),
+                    types: internString(org.types),
+                    status: internString(org.status),
+                    country: internString(org.country),
+                    city: internString(org.city),
+                    established: establishedText,
+                    establishedYear: Number.isInteger(org.establishedYear) ? org.establishedYear : (Number.isInteger(parsedYear) ? parsedYear : null),
+                    relationships: internString(org.relationships)
+                };
+            });
+        }
+
+        const COUNTRY_NAME_TO_ISO2 = Object.freeze({
+            argentina: 'ar', australia: 'au', austria: 'at', belgium: 'be', bolivia: 'bo',
+            brazil: 'br', bulgaria: 'bg', burundi: 'bi', cambodia: 'kh', canada: 'ca',
+            'costa rica': 'cr', croatia: 'hr', cyprus: 'cy', czechia: 'cz', 'czech republic': 'cz',
+            denmark: 'dk', egypt: 'eg', estonia: 'ee', eswatini: 'sz', finland: 'fi',
+            france: 'fr', gabon: 'ga', germany: 'de', greece: 'gr', hungary: 'hu',
+            india: 'in', ireland: 'ie', israel: 'il', italy: 'it', jamaica: 'jm',
+            japan: 'jp', mali: 'ml', mexico: 'mx', mozambique: 'mz', netherlands: 'nl',
+            'the netherlands': 'nl', norway: 'no', palestine: 'ps', peru: 'pe', philippines: 'ph',
+            poland: 'pl', portugal: 'pt', romania: 'ro', russia: 'ru', senegal: 'sn',
+            spain: 'es', sweden: 'se', switzerland: 'ch', togo: 'tg', turkey: 'tr',
+            ukraine: 'ua', 'united kingdom': 'gb', uk: 'gb', 'united states': 'us', usa: 'us'
+        });
+
+        function getCountryIso2(countryName) {
+            return COUNTRY_NAME_TO_ISO2[normalize(countryName)] || null;
+        }
+
+        function getFullRorId(org) {
+            return org.full_id || `https://ror.org/${org.id}`;
+        }
+
+        function normalizeRorId(value) {
+            const raw = String(value || '').trim();
+            if (!raw) return '';
+            const match = raw.match(/ror\.org\/([0-9a-z]{9})/i);
+            if (match) return match[1].toLowerCase();
+            return raw.replace(/^https?:\/\/ror\.org\//i, '').toLowerCase();
+        }
+
+        function toSafeExternalUrl(url) {
+            if (!url) return null;
+            try {
+                const raw = String(url).trim();
+                if (!/^https?:\/\//i.test(raw)) return null;
+                const parsed = new URL(raw);
+                if (!['http:', 'https:'].includes(parsed.protocol)) return null;
+                return parsed.href;
+            } catch {
+                return null;
+            }
+        }
+
+        function escapeCsvValue(value) {
+            const text = value == null ? '' : String(value);
+            if (/[",\n\r]/.test(text)) return `"${text.replace(/"/g, '""')}"`;
+            return text;
+        }
+
+        function buildLinkifiedTextFragment(text) {
+            const fragment = document.createDocumentFragment();
+            const source = String(text || '');
+            const urlRegex = /(https?:\/\/[^\s,;]+)/gi;
+            let lastIndex = 0;
+            let match;
+
+            while ((match = urlRegex.exec(source)) !== null) {
+                const [rawUrl] = match;
+                const start = match.index;
+                if (start > lastIndex) {
+                    fragment.appendChild(document.createTextNode(source.slice(lastIndex, start)));
+                }
+
+                const safeUrl = toSafeExternalUrl(rawUrl);
+                const relatedId = normalizeRorId(rawUrl);
+                const relatedIndex = orgIndexById.get(relatedId);
+                if (Number.isInteger(relatedIndex) && organizations[relatedIndex]) {
+                    const relatedOrg = organizations[relatedIndex];
+                    const link = document.createElement('a');
+                    link.href = '#';
+                    link.textContent = relatedOrg.name || rawUrl;
+                    link.title = rawUrl;
+                    link.addEventListener('click', event => {
+                        event.preventDefault();
+                        const targetOrg = organizations[relatedIndex];
+                        if (!targetOrg) return;
+                        showModal(targetOrg);
+                        if (map && Number.isFinite(targetOrg.lat) && Number.isFinite(targetOrg.lng)) {
+                            map.setView([targetOrg.lat, targetOrg.lng], Math.max(map.getZoom(), 6));
+                        }
+                    });
+                    fragment.appendChild(link);
+                } else if (safeUrl) {
+                    const link = document.createElement('a');
+                    link.href = safeUrl;
+                    link.target = '_blank';
+                    link.rel = 'noopener noreferrer';
+                    link.textContent = rawUrl;
+                    fragment.appendChild(link);
+                } else {
+                    fragment.appendChild(document.createTextNode(rawUrl));
+                }
+
+                lastIndex = start + rawUrl.length;
+            }
+
+            if (lastIndex < source.length) {
+                fragment.appendChild(document.createTextNode(source.slice(lastIndex)));
+            }
+
+            return fragment;
+        }
+
+        function downloadTextFile(filename, text, mimeType) {
+            const blob = new Blob([text], { type: mimeType });
+            const objectUrl = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = objectUrl;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(objectUrl);
+        }
+
+        function recordToCsvRow(org) {
+            const headers = ['id', 'full_id', 'name', 'lat', 'lng', 'website', 'types', 'status', 'country', 'city', 'established', 'relationships'];
+            const row = [
+                org.id,
+                getFullRorId(org),
+                org.name,
+                org.lat,
+                org.lng,
+                org.website,
+                org.types,
+                org.status,
+                org.country,
+                org.city,
+                org.established,
+                org.relationships
+            ];
+            return `${headers.map(escapeCsvValue).join(',')}\n${row.map(escapeCsvValue).join(',')}\n`;
+        }
+
+        function isPointInPolygon(lat, lng, polygonLatLngs) {
+            if (!Array.isArray(polygonLatLngs) || polygonLatLngs.length < 3) return false;
+            let inside = false;
+            for (let i = 0, j = polygonLatLngs.length - 1; i < polygonLatLngs.length; j = i++) {
+                const xi = polygonLatLngs[i].lng;
+                const yi = polygonLatLngs[i].lat;
+                const xj = polygonLatLngs[j].lng;
+                const yj = polygonLatLngs[j].lat;
+                const intersects = ((yi > lat) !== (yj > lat)) && (lng < ((xj - xi) * (lat - yi)) / ((yj - yi) || Number.EPSILON) + xi);
+                if (intersects) inside = !inside;
+            }
+            return inside;
+        }
+
+        function matchesSpatialSelection(org) {
+            if (!spatialSelectionLayer) return true;
+            const lat = Number(org.lat);
+            const lng = Number(org.lng);
+            if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
+
+            if (spatialSelectionLayer instanceof L.Rectangle) {
+                return spatialSelectionLayer.getBounds().contains([lat, lng]);
+            }
+
+            if (spatialSelectionLayer instanceof L.Polygon) {
+                const latLngs = spatialSelectionLayer.getLatLngs();
+                const ring = Array.isArray(latLngs[0]) ? latLngs[0] : latLngs;
+                return isPointInPolygon(lat, lng, ring);
+            }
+
+            return true;
+        }
+
+        function createFilterOptions() {
+            const countries = new Set();
+            const statuses = new Set();
+            const types = new Set();
+
+            organizations.forEach(org => {
+                if (org.country) countries.add(org.country);
+                if (org.status) statuses.add(org.status);
+                getTypes(org).forEach(type => types.add(type));
+            });
+
+            const fillSelect = (id, values) => {
+                const select = document.getElementById(id);
+                const previouslySelected = [...select.selectedOptions].map(option => option.value);
+                const options = [];
+                [...values].sort((a, b) => a.localeCompare(b)).forEach(value => {
+                    options.push(`<option value="${value}">${value}</option>`);
+                });
+                select.innerHTML = options.join('');
+                [...select.options].forEach(option => {
+                    option.selected = previouslySelected.includes(option.value);
+                });
+                if (window.jQuery && jQuery(select).hasClass('select2-hidden-accessible')) {
+                    jQuery(select).trigger('change.select2');
+                }
+            };
+
+            fillSelect('filter-country', countries);
+            fillSelect('filter-status', statuses);
+            fillSelect('filter-type', types);
+            updateFilterBadges();
+        }
+
+        function applyFilters() {
+            const searchValue = normalize(document.getElementById('filter-search').value);
+            const selectedValues = id => [...document.getElementById(id).selectedOptions].map(option => option.value);
+            const countryValues = selectedValues('filter-country');
+            const statusValues = selectedValues('filter-status');
+            const typeValues = selectedValues('filter-type');
+            const fromValue = parseInt(document.getElementById('filter-year-from').value, 10);
+            const toValue = parseInt(document.getElementById('filter-year-to').value, 10);
+
+            const hasFrom = Number.isInteger(fromValue);
+            const hasTo = Number.isInteger(toValue);
+            const yearFilterActive = hasFrom || hasTo;
+
+            markerCluster.clearLayers();
+            filteredOrganizations = [];
+            let visibleCount = 0;
+
+            organizations.forEach((org, index) => {
+                if (!Number.isFinite(org.lat) || !Number.isFinite(org.lng)) return;
+
+                const matchesSearch =
+                    !searchValue ||
+                    normalize(org.name).includes(searchValue) ||
+                    normalize(org.city).includes(searchValue) ||
+                    normalize(org.country).includes(searchValue) ||
+                    normalize(org.id).includes(searchValue) ||
+                    getFullRorId(org).toLowerCase().includes(searchValue);
+
+                const matchesCountry = countryValues.length === 0 || countryValues.includes(org.country);
+                const matchesStatus = statusValues.length === 0 || statusValues.includes(org.status);
+                const matchesType = typeValues.length === 0 || getTypes(org).some(type => typeValues.includes(type));
+                const matchesSpatial = matchesSpatialSelection(org);
+
+                const hasYear = Number.isInteger(org.establishedYear);
+                const matchesYear = !yearFilterActive || (hasYear && (!hasFrom || org.establishedYear >= fromValue) && (!hasTo || org.establishedYear <= toValue));
+
+                if (matchesSearch && matchesCountry && matchesStatus && matchesType && matchesYear && matchesSpatial) {
+                    const marker = L.marker([org.lat, org.lng], { orgIndex: index });
+                    marker.on('click', handleMarkerClick);
+                    markerCluster.addLayer(marker);
+                    filteredOrganizations.push(org);
+                    visibleCount++;
+                }
+            });
+
+            document.getElementById('count').textContent = `${visibleCount} / ${totalOrganizations} organizations`;
+
+            if (markerCluster.getLayers().length > 0) {
+                map.fitBounds(markerCluster.getBounds().pad(0.1));
+            }
+        }
+
+        function handleMarkerClick(event) {
+            const index = event && event.target && event.target.options ? event.target.options.orgIndex : null;
+            if (!Number.isInteger(index) || index < 0 || index >= organizations.length) return;
+            showModal(organizations[index]);
+        }
+
+        function updateFilterBadges() {
+            ['filter-country', 'filter-status', 'filter-type'].forEach(id => {
+                const select = document.getElementById(id);
+                const badge = document.getElementById(`badge-${id}`);
+                if (!select || !badge) return;
+                const count = [...select.selectedOptions].length;
+                badge.textContent = String(count);
+                badge.hidden = count === 0;
+            });
+        }
+
+        function initSelect2Filters() {
+            if (!(window.jQuery && jQuery.fn && jQuery.fn.select2)) return;
+            const dropdownParent = jQuery('#filter-modal .modal-content');
+
+            ['#filter-country', '#filter-status', '#filter-type'].forEach(selector => {
+                const element = jQuery(selector);
+                if (!element.length) return;
+                if (element.hasClass('select2-hidden-accessible')) {
+                    element.select2('destroy');
+                }
+                element.select2({
+                    width: '100%',
+                    closeOnSelect: false,
+                    placeholder: 'Select one or more',
+                    dropdownParent
+                });
+            });
+            updateFilterBadges();
+        }
+
+        function bindMultiSelectActionButtons() {
+            document.querySelectorAll('[data-select-target][data-select-action]').forEach(button => {
+                button.addEventListener('click', () => {
+                    const targetId = button.getAttribute('data-select-target');
+                    const action = button.getAttribute('data-select-action');
+                    const select = document.getElementById(targetId);
+                    if (!select) return;
+
+                    const shouldSelectAll = action === 'all';
+                    [...select.options].forEach(option => {
+                        option.selected = shouldSelectAll;
+                    });
+                    if (window.jQuery && jQuery(select).hasClass('select2-hidden-accessible')) {
+                        jQuery(select).trigger('change.select2');
+                    }
+                    applyFilters();
+                    updateFilterBadges();
+                });
+            });
+        }
+
+        function updateSpatialStatus(text) {
+            const status = document.getElementById('spatial-status');
+            if (!status) return;
+            status.textContent = text;
+        }
+
+        function startDrawMode(shape) {
+            if (!(window.L && L.Draw && map)) {
+                updateSpatialStatus('Spatial drawing tools are unavailable.');
+                return;
+            }
+
+            closeFilterModal();
+
+            if (shape === 'rectangle') {
+                setTimeout(() => {
+                    new L.Draw.Rectangle(map, { shapeOptions: { color: '#0070e8', weight: 2 } }).enable();
+                }, 0);
+                updateSpatialStatus('Draw a rectangle on the map to select markers.');
+                return;
+            }
+
+            if (shape === 'polygon') {
+                setTimeout(() => {
+                    new L.Draw.Polygon(map, {
+                        shapeOptions: { color: '#0070e8', weight: 2 },
+                        allowIntersection: false,
+                        showArea: true
+                    }).enable();
+                }, 0);
+                updateSpatialStatus('Click points to draw a lasso polygon, then finish the shape.');
+            }
+        }
+
+        function clearSpatialSelection(skipApply) {
+            spatialSelectionLayer = null;
+            if (spatialDrawLayerGroup) spatialDrawLayerGroup.clearLayers();
+            updateSpatialStatus('No spatial selection active.');
+            if (!skipApply) applyFilters();
+        }
+
+        function resetAllFilters() {
+            const form = document.getElementById('filter-form');
+            form.reset();
+            ['filter-country', 'filter-status', 'filter-type'].forEach(id => {
+                const element = document.getElementById(id);
+                [...element.options].forEach(option => {
+                    option.selected = false;
+                });
+                if (window.jQuery && jQuery(element).hasClass('select2-hidden-accessible')) {
+                    jQuery(element).trigger('change.select2');
+                }
+            });
+            clearSpatialSelection(true);
+            syncYearSlidersFromInputs();
+            applyFilters();
+            updateFilterBadges();
+        }
+
+        function exportVisibleMarkers() {
+            if (!map) return;
+            const bounds = map.getBounds();
+            const visible = filteredOrganizations.filter(org => bounds.contains([org.lat, org.lng]));
+            if (!visible.length) {
+                updateSpatialStatus('No visible markers to export.');
+                return;
+            }
+
+            const headers = ['id', 'full_id', 'name', 'lat', 'lng', 'website', 'types', 'status', 'country', 'city', 'established', 'relationships'];
+            const rows = visible.map(org => [
+                org.id,
+                getFullRorId(org),
+                org.name,
+                org.lat,
+                org.lng,
+                org.website,
+                org.types,
+                org.status,
+                org.country,
+                org.city,
+                org.established,
+                org.relationships
+            ]);
+            const csv = `${headers.map(escapeCsvValue).join(',')}\n${rows.map(row => row.map(escapeCsvValue).join(',')).join('\n')}\n`;
+            downloadTextFile('visible-markers.csv', csv, 'text/csv;charset=utf-8');
+            updateSpatialStatus(`Exported ${visible.length} visible marker(s).`);
+        }
+
+        function attachSpatialEvents() {
+            document.getElementById('spatial-bbox').addEventListener('click', () => startDrawMode('rectangle'));
+            document.getElementById('spatial-lasso').addEventListener('click', () => startDrawMode('polygon'));
+            document.getElementById('spatial-clear').addEventListener('click', clearSpatialSelection);
+            document.getElementById('spatial-clear-map').addEventListener('click', resetAllFilters);
+            document.getElementById('spatial-export-visible').addEventListener('click', exportVisibleMarkers);
+
+            if (!(window.L && L.Draw && map)) return;
+            spatialDrawLayerGroup = new L.FeatureGroup();
+            map.addLayer(spatialDrawLayerGroup);
+            map.on(L.Draw.Event.CREATED, event => {
+                spatialDrawLayerGroup.clearLayers();
+                spatialSelectionLayer = event.layer;
+                spatialDrawLayerGroup.addLayer(event.layer);
+                applyFilters();
+                const label = event.layerType === 'rectangle' ? 'Bounding box' : 'Lasso';
+                updateSpatialStatus(`${label} selection active.`);
+            });
+        }
+
+        function setupModalActions() {
+            const modal = document.getElementById('modal');
+            const close = () => closeModal();
+            document.getElementById('modal-close-x').addEventListener('click', close);
+            document.getElementById('modal-close-btn').addEventListener('click', close);
+            modal.addEventListener('click', event => {
+                if (event.target === modal) closeModal();
+            });
+            document.getElementById('modal-copy-ror').addEventListener('click', async () => {
+                if (!currentModalOrg) return;
+                const value = getFullRorId(currentModalOrg);
+                try {
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        await navigator.clipboard.writeText(value);
+                    } else {
+                        const area = document.createElement('textarea');
+                        area.value = value;
+                        document.body.appendChild(area);
+                        area.select();
+                        document.execCommand('copy');
+                        area.remove();
+                    }
+                } catch {}
+            });
+            document.getElementById('modal-open-website').addEventListener('click', () => {
+                if (!currentModalOrg) return;
+                const safeUrl = toSafeExternalUrl(currentModalOrg.website);
+                if (!safeUrl) return;
+                window.open(safeUrl, '_blank', 'noopener,noreferrer');
+            });
+        }
+
+        function setupFilterModalActions() {
+            const modal = document.getElementById('filter-modal');
+            const openButton = document.getElementById('open-filter-modal');
+            const closeButton = document.getElementById('filter-modal-close-btn');
+            const closeIcon = document.getElementById('filter-modal-close-x');
+
+            openButton.addEventListener('click', openFilterModal);
+            closeButton.addEventListener('click', closeFilterModal);
+            closeIcon.addEventListener('click', closeFilterModal);
+            modal.addEventListener('click', event => {
+                if (event.target === modal) closeFilterModal();
+            });
+        }
+
+        function openFilterModal() {
+            const modal = document.getElementById('filter-modal');
+            if (modal) modal.style.display = 'flex';
+        }
+
+        function closeFilterModal() {
+            const modal = document.getElementById('filter-modal');
+            if (modal) modal.style.display = 'none';
+        }
+
+        function attachFilterEvents() {
+            const form = document.getElementById('filter-form');
+            const resetButton = document.getElementById('filter-reset');
+
+            form.addEventListener('submit', event => {
+                event.preventDefault();
+                applyFilters();
+                closeFilterModal();
+            });
+
+            ['filter-search', 'filter-country', 'filter-status', 'filter-type', 'filter-year-from', 'filter-year-to']
+                .forEach(id => {
+                    const element = document.getElementById(id);
+                    element.addEventListener('input', applyFilters);
+                    element.addEventListener('change', () => {
+                        applyFilters();
+                        updateFilterBadges();
+                    });
+                });
+
+            resetButton.addEventListener('click', () => {
+                resetAllFilters();
+            });
+        }
+
+        function initMap() {
+            map = L.map('map', { zoomControl: true }).setView([25, 10], 2);
+            const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+                maxZoom: 19
+            });
+            const cartoLight = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+                maxZoom: 20
+            });
+            const cartoDark = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+                maxZoom: 20
+            });
+            const cartoVoyager = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+                maxZoom: 20
+            });
+            const esriSatellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                attribution: 'Tiles &copy; Esri',
+                maxZoom: 19
+            });
+
+            cartoVoyager.addTo(map);
+            baseLayerControl = L.control.layers(
+                {
+                    OpenStreetMap: osm,
+                    'Carto Voyager': cartoVoyager,
+                    'Carto Light': cartoLight,
+                    'Carto Dark': cartoDark,
+                    Satellite: esriSatellite
+                },
+                null,
+                { position: 'topright', collapsed: true }
+            );
+            baseLayerControl.addTo(map);
+
+            markerCluster = L.markerClusterGroup({
+                showCoverageOnHover: false,
+                maxClusterRadius: 45,
+                spiderfyOnMaxZoom: true,
+                zoomToBoundsOnClick: true
+            });
+            map.addLayer(markerCluster);
+
+            setupUpload();
+            attachFilterEvents();
+            bindMultiSelectActionButtons();
+            attachSpatialEvents();
+            setupModalActions();
+            setupFilterModalActions();
+            initSelect2Filters();
+            attachYearSliderEvents();
+            organizations = compactOrganizations(organizations);
+            rebuildMarkers();
+            document.getElementById('csv-upload-status').textContent = `Loaded default data (${organizations.length} rows).`;
+
+            if (markerCluster.getLayers().length > 0) {
+                map.fitBounds(markerCluster.getBounds().pad(0.1));
+            }
+        }
+
+        function showModal(org) {
+            const modal = document.getElementById('modal');
+            const body = document.getElementById('modal-body');
+            const nameEl = document.getElementById('modal-name');
+
+            currentModalOrg = org;
+            nameEl.textContent = org.name || org.id || 'Organization';
+            const fullId = getFullRorId(org);
+            const lat = Number(org.lat);
+            const lng = Number(org.lng);
+            const hasCoordinates = Number.isFinite(lat) && Number.isFinite(lng);
+            const placeQuery = encodeURIComponent(`${org.name || ''} ${org.city || ''} ${org.country || ''}`.trim());
+            const osmLink = hasCoordinates
+                ? `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}#map=12/${lat}/${lng}`
+                : `https://www.openstreetmap.org/search?query=${placeQuery}`;
+            const googleLink = hasCoordinates
+                ? `https://www.google.com/maps?q=${lat},${lng}`
+                : `https://www.google.com/maps/search/?api=1&query=${placeQuery}`;
+            const appleLink = hasCoordinates
+                ? `https://maps.apple.com/?ll=${lat},${lng}&q=${placeQuery}`
+                : `https://maps.apple.com/?q=${placeQuery}`;
+            const bingLink = hasCoordinates
+                ? `https://www.bing.com/maps?cp=${lat}~${lng}&lvl=12`
+                : `https://www.bing.com/maps?q=${placeQuery}`;
+            const createRow = (label, content) => {
+                const row = document.createElement('div');
+                row.className = 'info-row';
+                const labelNode = document.createElement('strong');
+                labelNode.textContent = label;
+                const valueNode = document.createElement('div');
+                if (typeof content === 'string') {
+                    valueNode.textContent = content;
+                } else {
+                    valueNode.appendChild(content);
+                }
+                row.appendChild(labelNode);
+                row.appendChild(valueNode);
+                return row;
+            };
+            const makeLink = (href, text) => {
+                const link = document.createElement('a');
+                link.href = href;
+                link.target = '_blank';
+                link.rel = 'noopener noreferrer';
+                link.textContent = text;
+                return link;
+            };
+
+            body.textContent = '';
+            body.appendChild(createRow('ROR ID', makeLink(fullId, org.id || fullId)));
+            const locationNode = document.createElement('span');
+            locationNode.className = 'location-with-flag';
+            const countryIso2 = getCountryIso2(org.country);
+            if (countryIso2) {
+                const flag = document.createElement('span');
+                flag.className = `fi fi-${countryIso2}`;
+                flag.setAttribute('aria-hidden', 'true');
+                locationNode.appendChild(flag);
+            }
+            const locationText = document.createElement('span');
+            locationText.textContent = `${org.city || '—'}, ${org.country || '—'}`;
+            locationNode.appendChild(locationText);
+            body.appendChild(createRow('Location', locationNode));
+
+            const mapsNode = document.createElement('div');
+            mapsNode.appendChild(makeLink(osmLink, 'OpenStreetMap'));
+            mapsNode.appendChild(document.createTextNode(' · '));
+            mapsNode.appendChild(makeLink(googleLink, 'Google Maps'));
+            mapsNode.appendChild(document.createTextNode(' · '));
+            mapsNode.appendChild(makeLink(appleLink, 'Apple Maps'));
+            mapsNode.appendChild(document.createTextNode(' · '));
+            mapsNode.appendChild(makeLink(bingLink, 'Bing Maps'));
+            body.appendChild(createRow('Map links', mapsNode));
+
+            body.appendChild(createRow('Established', org.established || '—'));
+            body.appendChild(createRow('Types', org.types || '—'));
+            body.appendChild(createRow('Status', org.status || '—'));
+
+            const safeWebsite = toSafeExternalUrl(org.website);
+            document.getElementById('modal-open-website').disabled = !safeWebsite;
+            if (safeWebsite) {
+                body.appendChild(createRow('Website', makeLink(safeWebsite, 'Visit site')));
+            } else if (org.website) {
+                body.appendChild(createRow('Website', 'Invalid or unsafe URL'));
+            }
+
+            if (org.relationships) {
+                body.appendChild(createRow('Relationships', buildLinkifiedTextFragment(org.relationships)));
+            }
+
+            modal.style.display = 'flex';
+        }
+
+        function closeModal() {
+            currentModalOrg = null;
+            document.getElementById('modal-open-website').disabled = true;
+            document.getElementById('modal').style.display = 'none';
+        }
+
+        // Keyboard escape support
+        document.addEventListener('keydown', e => {
+            if (e.key === "Escape") closeModal();
+        });
+
+        // Initialise
+        window.onload = () => {
+            initMap();
+        };
+    </script>
+</body>
+</html>
