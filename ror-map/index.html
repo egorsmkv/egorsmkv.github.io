@@ -36,12 +36,9 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flag-icons@7.2.3/css/flag-icons.min.css" />
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
-    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     <style>
         html, body { margin:0; padding:0; height:100%; font-family: system-ui, -apple-system, sans-serif; }
         #map { width:100%; height:100%; }
@@ -149,41 +146,8 @@
             font-size: 13px;
             background: #fff;
         }
-        .filter-control[multiple]:not(.select2-hidden-accessible) {
+        .filter-control[multiple] {
             min-height: 96px;
-        }
-        .select2-container {
-            width: 100% !important;
-        }
-        .select2-container .select2-selection--multiple {
-            border: 1px solid rgba(0,0,0,0.2);
-            border-radius: 6px;
-            min-height: 38px !important;
-            font-size: 13px;
-        }
-        .select2-container--default .select2-selection--multiple .select2-selection__rendered {
-            display: block;
-            min-height: 30px;
-            padding: 4px 8px 2px;
-            margin: 0;
-        }
-        .select2-container--default .select2-selection--multiple .select2-selection__choice {
-            margin: 2px 4px 2px 0;
-            background: #eef5ff;
-            border: 1px solid #b6cef6;
-        }
-        .select2-container--default .select2-selection--multiple .select2-selection__placeholder {
-            margin: 0;
-            line-height: 28px;
-        }
-        .select2-container--default .select2-search--inline {
-            margin: 0;
-            padding: 0;
-        }
-        .select2-container--default .select2-search--inline .select2-search__field {
-            margin: 0 !important;
-            line-height: 1.4;
-            height: auto !important;
         }
         .filter-select-actions {
             display: flex;
@@ -333,6 +297,36 @@
             padding: 20px 24px;
             line-height: 1.5;
         }
+        .modal-nav-arrow {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 44px;
+            height: 44px;
+            border: 1px solid rgba(0,0,0,0.16);
+            border-radius: 999px;
+            background: rgba(255,255,255,0.96);
+            color: #0a3d7d;
+            font-size: 24px;
+            font-weight: 700;
+            line-height: 1;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 6px 18px rgba(0,0,0,0.24);
+            cursor: pointer;
+            z-index: 2;
+            transition: transform 140ms ease, background-color 140ms ease, opacity 140ms ease;
+        }
+        .modal-nav-prev { left: max(10px, calc(50% - min(46vw, 310px) - 56px)); }
+        .modal-nav-next { right: max(10px, calc(50% - min(46vw, 310px) - 56px)); }
+        .modal-nav-prev:hover:not(:disabled) { transform: translateY(-50%) translateX(-3px); }
+        .modal-nav-next:hover:not(:disabled) { transform: translateY(-50%) translateX(3px); }
+        .modal-nav-arrow:disabled {
+            opacity: 0.38;
+            cursor: not-allowed;
+            transform: translateY(-50%);
+        }
         .info-row {
             display: grid;
             grid-template-columns: 140px 1fr;
@@ -395,6 +389,13 @@
             .side-panel {
                 width: calc(100% - 20px);
             }
+            .modal-nav-arrow {
+                width: 36px;
+                height: 36px;
+                font-size: 22px;
+            }
+            .modal-nav-prev { left: max(6px, calc(50% - min(46vw, 310px) - 46px)); }
+            .modal-nav-next { right: max(6px, calc(50% - min(46vw, 310px) - 46px)); }
             .filter-modal-content {
                 width: calc(100vw - 16px);
                 max-height: 90vh;
@@ -500,6 +501,7 @@
 
     <!-- Modal -->
     <div id="modal" class="modal">
+        <button type="button" id="modal-nav-prev" class="modal-nav-arrow modal-nav-prev" aria-label="Previous organization" title="Previous organization" disabled>‹</button>
         <div class="modal-content">
             <span class="close-btn" id="modal-close-x">×</span>
             <div class="modal-header">
@@ -512,6 +514,7 @@
                 <button type="button" id="modal-close-btn" class="primary">Close</button>
             </div>
         </div>
+        <button type="button" id="modal-nav-next" class="modal-nav-arrow modal-nav-next" aria-label="Next organization" title="Next organization" disabled>›</button>
     </div>
 
     <script>
@@ -3108,14 +3111,119 @@
 
         let map, markerCluster;
         let totalOrganizations = 0;
-        let filteredOrganizationIndexes = [];
+        let filteredOrganizationIndexes = new Uint32Array(0);
+        let filteredOrganizationCount = 0;
         let spatialSelectionLayer = null;
         let spatialDrawLayerGroup = null;
         let currentModalOrgIndex = -1;
-        let select2Initialized = false;
-        let orgIndexById = new Map();
+        let orgIndexById = null;
         const EMPTY_TYPES = Object.freeze([]);
+        const EMPTY_META = Object.freeze(Object.create(null));
+        const ORG_META_FIELDS = Object.freeze([
+            'relationships',
+            'acronyms',
+            'aliases',
+            'labels',
+            'wikidataId',
+            'isni',
+            'crossrefFunderId',
+            'gridId',
+            'geonamesId',
+            'createdDate',
+            'lastModifiedDate',
+            'createdSchemaVersion',
+            'lastModifiedSchemaVersion',
+            'domains',
+            'wikipedia'
+        ]);
+        const CORE_ORG_FIELD_LOOKUP = Object.freeze({
+            id: true,
+            name: true,
+            lat: true,
+            lng: true,
+            website: true,
+            types: true,
+            typesList: true,
+            status: true,
+            country: true,
+            city: true,
+            established: true,
+            establishedYear: true,
+            meta: true
+        });
         const CSV_HEADER_LINE = 'id,full_id,name,lat,lng,website,types,status,country,city,established,relationships\n';
+
+        function ensureFilteredIndexesCapacity(size) {
+            if (filteredOrganizationIndexes.length >= size) return;
+            let capacity = filteredOrganizationIndexes.length || 1024;
+            while (capacity < size) capacity *= 2;
+            filteredOrganizationIndexes = new Uint32Array(capacity);
+        }
+
+        function getOrganizationMeta(org) {
+            return (org && org.meta) || EMPTY_META;
+        }
+
+        function getOrganizationMetaValue(org, key) {
+            const meta = getOrganizationMeta(org);
+            return meta[key] || '';
+        }
+
+        function splitAndCleanValues(value, delimiterRegex) {
+            const text = String(value || '').trim();
+            if (!text) return EMPTY_TYPES;
+            const rawValues = text.split(delimiterRegex);
+            const deduped = [];
+            const seen = new Set();
+            for (let i = 0; i < rawValues.length; i++) {
+                const cleaned = stripLocalePrefix(rawValues[i]);
+                if (!cleaned) continue;
+                const key = cleaned.toLowerCase();
+                if (seen.has(key)) continue;
+                seen.add(key);
+                deduped.push(cleaned);
+            }
+            return deduped;
+        }
+
+        function parseRelationshipGroups(relationshipsText) {
+            const groups = Object.create(null);
+            const chunks = String(relationshipsText || '')
+                .split(';')
+                .map(part => part.trim())
+                .filter(Boolean);
+
+            for (let i = 0; i < chunks.length; i++) {
+                const chunk = chunks[i];
+                const typedMatch = chunk.match(/^([a-z_ -]+)\s*:\s*(.+)$/i);
+                const type = typedMatch
+                    ? typedMatch[1].trim().toLowerCase().replace(/\s+/g, '_')
+                    : 'related';
+                const valuePart = typedMatch ? typedMatch[2] : chunk;
+                const entries = valuePart.split(',').map(value => value.trim()).filter(Boolean);
+                if (!entries.length) continue;
+                if (!groups[type]) groups[type] = [];
+                groups[type].push(...entries);
+            }
+
+            return groups;
+        }
+
+        function relationshipTypeLabel(type) {
+            const normalized = String(type || '').trim().toLowerCase();
+            const labels = {
+                parent: 'Administrative Parent',
+                child: 'Child Unit',
+                related: 'Academic Affiliate',
+                successor: 'Successor Organization',
+                predecessor: 'Predecessor Organization'
+            };
+            return labels[normalized] || normalized.replace(/_/g, ' ').replace(/\b\w/g, m => m.toUpperCase());
+        }
+
+        function formatRelationshipType(type) {
+            return String(type || '').trim().replace(/_/g, ' ').replace(/\b\w/g, m => m.toUpperCase());
+        }
 
         function stripLocalePrefix(value) {
             const match = (value || '').trim().match(/^(?:[a-z]{2,3}|no_lang_code)\s*:\s*(.+)$/i);
@@ -3143,6 +3251,13 @@
                 const value = fields[headerIndex[key]];
                 return typeof value === 'string' ? value.trim() : '';
             };
+            const firstNonEmpty = (fields, keys) => {
+                for (let i = 0; i < keys.length; i++) {
+                    const value = valueFor(fields, keys[i]);
+                    if (value) return value;
+                }
+                return '';
+            };
 
             const addRow = () => {
                 if (!row.length) {
@@ -3162,10 +3277,10 @@
                     return;
                 }
 
-                const rawName = valueFor(row, 'names.types.ror_display');
-                const fallbackName = valueFor(row, 'names.types.label') || valueFor(row, 'names.types.alias');
-                const lat = Number(valueFor(row, 'locations.geonames_details.lat'));
-                const lng = Number(valueFor(row, 'locations.geonames_details.lng'));
+                const rawName = firstNonEmpty(row, ['names.types.ror_display', 'name']);
+                const fallbackName = firstNonEmpty(row, ['names.types.label', 'names.types.alias', 'id']);
+                const lat = Number(firstNonEmpty(row, ['locations.geonames_details.lat', 'lat']));
+                const lng = Number(firstNonEmpty(row, ['locations.geonames_details.lng', 'lng']));
 
                 if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
                     row = [];
@@ -3174,20 +3289,54 @@
 
                 const established = valueFor(row, 'established');
                 const establishedYear = Number.parseInt(established, 10);
+                const aliases = splitAndCleanValues(valueFor(row, 'names.types.alias'), /\s*;\s*/);
+                const labels = splitAndCleanValues(valueFor(row, 'names.types.label'), /\s*;\s*/);
+                const acronyms = splitAndCleanValues(valueFor(row, 'names.types.acronym'), /\s*;\s*/);
+                const wikidataId = firstNonEmpty(row, ['external_ids.type.wikidata.preferred', 'external_ids.type.wikidata.all', 'wikidataId']);
+                const isni = firstNonEmpty(row, ['external_ids.type.isni.preferred', 'external_ids.type.isni.all', 'isni']);
+                const crossrefFunderId = firstNonEmpty(row, [
+                    'external_ids.type.fundref.preferred',
+                    'external_ids.type.fundref.all',
+                    'external_ids.type.crossref_funder_id.preferred',
+                    'external_ids.type.crossref_funder_id.all',
+                    'crossrefFunderId'
+                ]);
+                const gridId = firstNonEmpty(row, ['external_ids.type.grid.preferred', 'external_ids.type.grid.all', 'gridId']);
+                const geonamesId = firstNonEmpty(row, ['locations.geonames_id', 'locations.geonames_details.geonames_id', 'locations.geonames_details.id', 'geonamesId']);
+                const createdDate = firstNonEmpty(row, ['admin.created.date', 'admin.created', 'createdDate']);
+                const lastModifiedDate = firstNonEmpty(row, ['admin.last_modified.date', 'admin.last_modified', 'lastModifiedDate']);
+                const createdSchemaVersion = firstNonEmpty(row, ['admin.created.schema_version', 'createdSchemaVersion']);
+                const lastModifiedSchemaVersion = firstNonEmpty(row, ['admin.last_modified.schema_version', 'lastModifiedSchemaVersion']);
+                const domains = firstNonEmpty(row, ['domains', 'domain']);
+                const wikipedia = firstNonEmpty(row, ['links.type.wikipedia', 'wikipedia']);
 
                 onOrganization({
                     id: id.replace(/^https?:\/\/ror\.org\//i, ''),
                     name: stripLocalePrefix(rawName) || stripLocalePrefix(fallbackName) || id,
                     lat,
                     lng,
-                    website: valueFor(row, 'links.type.website'),
-                    types: valueFor(row, 'types'),
-                    status: valueFor(row, 'status'),
-                    country: valueFor(row, 'locations.geonames_details.country_name'),
-                    city: valueFor(row, 'locations.geonames_details.name'),
+                    website: firstNonEmpty(row, ['links.type.website', 'website']),
+                    types: firstNonEmpty(row, ['types']),
+                    status: firstNonEmpty(row, ['status']),
+                    country: firstNonEmpty(row, ['locations.geonames_details.country_name', 'country']),
+                    city: firstNonEmpty(row, ['locations.geonames_details.name', 'city']),
                     established,
                     establishedYear: Number.isInteger(establishedYear) ? establishedYear : null,
-                    relationships: valueFor(row, 'relationships')
+                    relationships: firstNonEmpty(row, ['relationships']),
+                    acronyms: acronyms.join('; '),
+                    aliases: aliases.join('; '),
+                    labels: labels.join('; '),
+                    wikidataId: String(wikidataId || '').trim(),
+                    isni: String(isni || '').trim(),
+                    crossrefFunderId: String(crossrefFunderId || '').trim(),
+                    gridId: String(gridId || '').trim(),
+                    geonamesId: String(geonamesId || '').trim(),
+                    createdDate: String(createdDate || '').trim(),
+                    lastModifiedDate: String(lastModifiedDate || '').trim(),
+                    createdSchemaVersion: String(createdSchemaVersion || '').trim(),
+                    lastModifiedSchemaVersion: String(lastModifiedSchemaVersion || '').trim(),
+                    domains: String(domains || '').trim(),
+                    wikipedia: String(wikipedia || '').trim()
                 });
 
                 row = [];
@@ -3290,13 +3439,13 @@
         function rebuildMarkers() {
             markerCluster.clearLayers();
             totalOrganizations = 0;
-            orgIndexById = new Map();
+            orgIndexById = null;
             for (let index = 0; index < organizations.length; index++) {
                 const org = organizations[index];
                 if (Number.isFinite(org.lat) && Number.isFinite(org.lng)) totalOrganizations++;
-                const normalizedId = normalizeRorId(org.id);
-                if (normalizedId) orgIndexById.set(normalizedId, index);
             }
+            filteredOrganizationCount = 0;
+            ensureFilteredIndexesCapacity(totalOrganizations);
 
             createFilterOptions();
             applyFilters();
@@ -3436,6 +3585,7 @@
             const typesPool = new Map();
             const establishedPool = new Map();
             const typesListPool = new Map();
+            const schemaVersionPool = new Map();
 
             const internFromPool = (pool, value) => {
                 const text = String(value || '').trim();
@@ -3457,12 +3607,15 @@
                 return cleaned.length ? cleaned : EMPTY_TYPES;
             };
 
+            const normalizeText = value => String(value || '').trim();
+
             return org => {
-                const id = normalizeRorId(org.id) || String(org.id || '').trim();
-                const name = String(org.name || '').trim() || id;
+                const sourceMeta = getOrganizationMeta(org);
+                const id = normalizeRorId(org.id) || normalizeText(org.id);
+                const name = normalizeText(org.name) || id;
                 const lat = Number(org.lat);
                 const lng = Number(org.lng);
-                const website = String(org.website || '').trim();
+                const website = normalizeText(org.website);
                 const types = internFromPool(typesPool, org.types);
                 let typesList = typesListPool.get(types);
                 if (!typesList) {
@@ -3471,29 +3624,55 @@
                 }
                 const status = internFromPool(statusPool, org.status);
                 const country = internFromPool(countryPool, org.country);
-                const city = String(org.city || '').trim();
+                const city = normalizeText(org.city);
                 const established = internFromPool(establishedPool, org.established);
                 const parsedYear = Number.parseInt(established, 10);
                 const establishedYear = Number.isInteger(org.establishedYear)
                     ? org.establishedYear
                     : (Number.isInteger(parsedYear) ? parsedYear : null);
-                const relationships = String(org.relationships || '').trim();
 
-                return {
-                    id,
-                    name,
-                    lat,
-                    lng,
-                    website,
-                    types,
-                    typesList,
-                    status,
-                    country,
-                    city,
-                    established,
-                    establishedYear,
-                    relationships
-                };
+                let meta = null;
+                for (let i = 0; i < ORG_META_FIELDS.length; i++) {
+                    const key = ORG_META_FIELDS[i];
+                    const directValue = normalizeText(org[key]);
+                    const metaValue = directValue || normalizeText(sourceMeta[key]);
+                    if (!metaValue) continue;
+                    if (!meta) meta = Object.create(null);
+                    if (key === 'createdSchemaVersion' || key === 'lastModifiedSchemaVersion') {
+                        meta[key] = internFromPool(schemaVersionPool, metaValue);
+                    } else {
+                        meta[key] = metaValue;
+                    }
+                }
+
+                org.id = id;
+                org.name = name;
+                org.lat = lat;
+                org.lng = lng;
+                org.website = website;
+                org.types = types;
+                org.typesList = typesList;
+                org.status = status;
+                org.country = country;
+                org.city = city;
+                org.established = established;
+                org.establishedYear = establishedYear;
+
+                if (meta) {
+                    org.meta = meta;
+                } else if ('meta' in org) {
+                    delete org.meta;
+                }
+
+                for (let i = 0; i < ORG_META_FIELDS.length; i++) {
+                    delete org[ORG_META_FIELDS[i]];
+                }
+
+                for (const key in org) {
+                    if (!CORE_ORG_FIELD_LOOKUP[key]) delete org[key];
+                }
+
+                return org;
             };
         }
 
@@ -3535,6 +3714,17 @@
             return raw.replace(/^https?:\/\/ror\.org\//i, '').toLowerCase();
         }
 
+        function getOrgIndexByIdMap() {
+            if (orgIndexById) return orgIndexById;
+            const indexById = new Map();
+            for (let index = 0; index < organizations.length; index++) {
+                const normalizedId = normalizeRorId(organizations[index] && organizations[index].id);
+                if (normalizedId) indexById.set(normalizedId, index);
+            }
+            orgIndexById = indexById;
+            return indexById;
+        }
+
         function toSafeExternalUrl(url) {
             if (!url) return null;
             try {
@@ -3570,7 +3760,7 @@
 
                 const safeUrl = toSafeExternalUrl(rawUrl);
                 const relatedId = normalizeRorId(rawUrl);
-                const relatedIndex = orgIndexById.get(relatedId);
+                const relatedIndex = getOrgIndexByIdMap().get(relatedId);
                 if (Number.isInteger(relatedIndex) && organizations[relatedIndex]) {
                     const relatedOrg = organizations[relatedIndex];
                     const link = document.createElement('a');
@@ -3621,7 +3811,7 @@
         }
 
         function recordToCsvRow(org) {
-            return `${escapeCsvValue(org.id)},${escapeCsvValue(getFullRorId(org))},${escapeCsvValue(org.name)},${escapeCsvValue(org.lat)},${escapeCsvValue(org.lng)},${escapeCsvValue(org.website)},${escapeCsvValue(org.types)},${escapeCsvValue(org.status)},${escapeCsvValue(org.country)},${escapeCsvValue(org.city)},${escapeCsvValue(org.established)},${escapeCsvValue(org.relationships)}\n`;
+            return `${escapeCsvValue(org.id)},${escapeCsvValue(getFullRorId(org))},${escapeCsvValue(org.name)},${escapeCsvValue(org.lat)},${escapeCsvValue(org.lng)},${escapeCsvValue(org.website)},${escapeCsvValue(org.types)},${escapeCsvValue(org.status)},${escapeCsvValue(org.country)},${escapeCsvValue(org.city)},${escapeCsvValue(org.established)},${escapeCsvValue(getOrganizationMetaValue(org, 'relationships'))}\n`;
         }
 
         function isPointInPolygon(lat, lng, polygonLatLngs) {
@@ -3689,9 +3879,6 @@
                     fragment.appendChild(option);
                 }
                 select.replaceChildren(fragment);
-                if (window.jQuery && jQuery(select).hasClass('select2-hidden-accessible')) {
-                    jQuery(select).trigger('change.select2');
-                }
             };
 
             fillSelect('filter-country', countries);
@@ -3716,7 +3903,8 @@
             const hasTypeFilter = typeValues.size > 0;
 
             markerCluster.clearLayers();
-            filteredOrganizationIndexes.length = 0;
+            filteredOrganizationCount = 0;
+            ensureFilteredIndexesCapacity(totalOrganizations || organizations.length);
             let visibleCount = 0;
 
             for (let index = 0; index < organizations.length; index++) {
@@ -3751,15 +3939,19 @@
                 if (matchesSearch && matchesCountry && matchesStatus && matchesType && matchesYear && matchesSpatial) {
                     const marker = L.marker([org.lat, org.lng], { orgIndex: index });
                     markerCluster.addLayer(marker);
-                    filteredOrganizationIndexes.push(index);
+                    filteredOrganizationIndexes[filteredOrganizationCount] = index;
+                    filteredOrganizationCount++;
                     visibleCount++;
                 }
             }
 
             document.getElementById('count').textContent = `${visibleCount} / ${totalOrganizations} organizations`;
 
-            if (markerCluster.getLayers().length > 0) {
+            if (visibleCount > 0) {
                 map.fitBounds(markerCluster.getBounds().pad(0.1));
+            }
+            if (currentModalOrgIndex >= 0) {
+                updateModalNavigationButtons(currentModalOrgIndex);
             }
         }
 
@@ -3768,6 +3960,78 @@
             const index = layer && layer.options ? layer.options.orgIndex : null;
             if (!Number.isInteger(index) || index < 0 || index >= organizations.length) return;
             showModal(index);
+        }
+
+        function getModalNavigationContext(index) {
+            const context = { previous: null, next: null, position: -1, total: 0 };
+            if (!Number.isInteger(index) || index < 0 || index >= organizations.length) {
+                return context;
+            }
+
+            if (filteredOrganizationCount > 0) {
+                context.total = filteredOrganizationCount;
+                for (let i = 0; i < filteredOrganizationCount; i++) {
+                    if (filteredOrganizationIndexes[i] !== index) continue;
+                    context.position = i;
+                    context.previous = i > 0 ? filteredOrganizationIndexes[i - 1] : null;
+                    context.next = i < filteredOrganizationCount - 1 ? filteredOrganizationIndexes[i + 1] : null;
+                    return context;
+                }
+            }
+
+            let previous = null;
+            let foundCurrent = false;
+            let position = -1;
+            let total = 0;
+
+            for (let i = 0; i < organizations.length; i++) {
+                const org = organizations[i];
+                if (!org || !Number.isFinite(org.lat) || !Number.isFinite(org.lng)) continue;
+                if (i === index) {
+                    foundCurrent = true;
+                    position = total;
+                } else if (!foundCurrent) {
+                    previous = i;
+                } else if (context.next === null) {
+                    context.next = i;
+                }
+                total++;
+            }
+
+            if (foundCurrent) {
+                context.total = total;
+                context.position = position;
+                context.previous = previous;
+                return context;
+            }
+
+            context.total = organizations.length;
+            context.position = index;
+            context.previous = index > 0 ? index - 1 : null;
+            context.next = index < organizations.length - 1 ? index + 1 : null;
+            return context;
+        }
+
+        function updateModalNavigationButtons(index) {
+            const prevButton = document.getElementById('modal-nav-prev');
+            const nextButton = document.getElementById('modal-nav-next');
+            if (!prevButton || !nextButton) return;
+
+            const context = getModalNavigationContext(index);
+            prevButton.disabled = !Number.isInteger(context.previous);
+            nextButton.disabled = !Number.isInteger(context.next);
+        }
+
+        function navigateModal(step) {
+            if (!Number.isInteger(currentModalOrgIndex) || currentModalOrgIndex < 0) return;
+            const context = getModalNavigationContext(currentModalOrgIndex);
+            const targetIndex = step < 0 ? context.previous : context.next;
+            if (!Number.isInteger(targetIndex)) return;
+            showModal(targetIndex);
+            const targetOrg = organizations[targetIndex];
+            if (map && targetOrg && Number.isFinite(targetOrg.lat) && Number.isFinite(targetOrg.lng)) {
+                map.panTo([targetOrg.lat, targetOrg.lng]);
+            }
         }
 
         function updateFilterBadges() {
@@ -3781,27 +4045,6 @@
             });
         }
 
-        function initSelect2Filters() {
-            if (!(window.jQuery && jQuery.fn && jQuery.fn.select2)) return false;
-            const dropdownParent = jQuery('#filter-modal .modal-content');
-
-            ['#filter-country', '#filter-status', '#filter-type'].forEach(selector => {
-                const element = jQuery(selector);
-                if (!element.length) return;
-                if (element.hasClass('select2-hidden-accessible')) {
-                    element.select2('destroy');
-                }
-                element.select2({
-                    width: '100%',
-                    closeOnSelect: false,
-                    placeholder: 'Select one or more',
-                    dropdownParent
-                });
-            });
-            updateFilterBadges();
-            return true;
-        }
-
         function bindMultiSelectActionButtons() {
             document.querySelectorAll('[data-select-target][data-select-action]').forEach(button => {
                 button.addEventListener('click', () => {
@@ -3813,9 +4056,6 @@
                     const shouldSelectAll = action === 'all';
                     for (let i = 0; i < select.options.length; i++) {
                         select.options[i].selected = shouldSelectAll;
-                    }
-                    if (window.jQuery && jQuery(select).hasClass('select2-hidden-accessible')) {
-                        jQuery(select).trigger('change.select2');
                     }
                     applyFilters();
                     updateFilterBadges();
@@ -3872,9 +4112,6 @@
                 for (let i = 0; i < element.options.length; i++) {
                     element.options[i].selected = false;
                 }
-                if (window.jQuery && jQuery(element).hasClass('select2-hidden-accessible')) {
-                    jQuery(element).trigger('change.select2');
-                }
             });
             clearSpatialSelection(true);
             syncYearSlidersFromInputs();
@@ -3887,7 +4124,7 @@
             const bounds = map.getBounds();
             let csv = CSV_HEADER_LINE;
             let visibleCount = 0;
-            for (let i = 0; i < filteredOrganizationIndexes.length; i++) {
+            for (let i = 0; i < filteredOrganizationCount; i++) {
                 const index = filteredOrganizationIndexes[i];
                 const org = organizations[index];
                 if (!org || !bounds.contains([org.lat, org.lng])) continue;
@@ -3925,6 +4162,10 @@
         function setupModalActions() {
             const modal = document.getElementById('modal');
             const close = () => closeModal();
+            const prev = document.getElementById('modal-nav-prev');
+            const next = document.getElementById('modal-nav-next');
+            if (prev) prev.addEventListener('click', () => navigateModal(-1));
+            if (next) next.addEventListener('click', () => navigateModal(1));
             document.getElementById('modal-close-x').addEventListener('click', close);
             document.getElementById('modal-close-btn').addEventListener('click', close);
             modal.addEventListener('click', event => {
@@ -3973,9 +4214,6 @@
         function openFilterModal() {
             const modal = document.getElementById('filter-modal');
             if (!modal) return;
-            if (!select2Initialized) {
-                select2Initialized = initSelect2Filters();
-            }
             modal.style.display = 'flex';
         }
 
@@ -4010,26 +4248,32 @@
         }
 
         function initMap() {
-            map = L.map('map', { zoomControl: true }).setView([25, 10], 2);
+            map = L.map('map', { zoomControl: true, preferCanvas: true }).setView([25, 10], 2);
+            const sharedTileOptions = { updateWhenIdle: true, keepBuffer: 1 };
             const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-                maxZoom: 19
+                maxZoom: 19,
+                ...sharedTileOptions
             });
             const cartoLight = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
                 attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
-                maxZoom: 20
+                maxZoom: 20,
+                ...sharedTileOptions
             });
             const cartoDark = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
                 attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
-                maxZoom: 20
+                maxZoom: 20,
+                ...sharedTileOptions
             });
             const cartoVoyager = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
                 attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
-                maxZoom: 20
+                maxZoom: 20,
+                ...sharedTileOptions
             });
             const esriSatellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
                 attribution: 'Tiles &copy; Esri',
-                maxZoom: 19
+                maxZoom: 19,
+                ...sharedTileOptions
             });
 
             cartoVoyager.addTo(map);
@@ -4048,8 +4292,11 @@
             markerCluster = L.markerClusterGroup({
                 showCoverageOnHover: false,
                 maxClusterRadius: 45,
+                chunkedLoading: true,
                 spiderfyOnMaxZoom: true,
-                zoomToBoundsOnClick: true
+                zoomToBoundsOnClick: true,
+                animate: false,
+                removeOutsideVisibleBounds: true
             });
             markerCluster.on('click', handleMarkerClick);
             map.addLayer(markerCluster);
@@ -4065,7 +4312,7 @@
             rebuildMarkers();
             document.getElementById('csv-upload-status').textContent = `Loaded default data (${organizations.length} rows).`;
 
-            if (markerCluster.getLayers().length > 0) {
+            if (filteredOrganizationCount > 0) {
                 map.fitBounds(markerCluster.getBounds().pad(0.1));
             }
         }
@@ -4119,6 +4366,14 @@
                 link.textContent = text;
                 return link;
             };
+            const makeInlineList = values => {
+                const fragment = document.createDocumentFragment();
+                for (let i = 0; i < values.length; i++) {
+                    if (i > 0) fragment.appendChild(document.createTextNode(' · '));
+                    fragment.appendChild(document.createTextNode(values[i]));
+                }
+                return fragment;
+            };
 
             body.textContent = '';
             body.appendChild(createRow('ROR ID', makeLink(fullId, org.id || fullId)));
@@ -4146,34 +4401,153 @@
             mapsNode.appendChild(makeLink(bingLink, 'Bing Maps'));
             body.appendChild(createRow('Map links', mapsNode));
 
+            const orgMeta = getOrganizationMeta(org);
+            const orgAcronyms = orgMeta.acronyms || '';
+            const orgAliases = orgMeta.aliases || '';
+            const orgLabels = orgMeta.labels || '';
+            const orgDomains = orgMeta.domains || '';
+            const orgGeonamesId = orgMeta.geonamesId || '';
+            const orgWikidataId = orgMeta.wikidataId || '';
+            const orgIsni = orgMeta.isni || '';
+            const orgCrossrefFunderId = orgMeta.crossrefFunderId || '';
+            const orgGridId = orgMeta.gridId || '';
+            const orgCreatedDate = orgMeta.createdDate || '';
+            const orgLastModifiedDate = orgMeta.lastModifiedDate || '';
+            const orgCreatedSchemaVersion = orgMeta.createdSchemaVersion || '';
+            const orgLastModifiedSchemaVersion = orgMeta.lastModifiedSchemaVersion || '';
+            const orgWikipedia = orgMeta.wikipedia || '';
+            const orgRelationships = orgMeta.relationships || '';
+
             body.appendChild(createRow('Established', org.established || '—'));
             body.appendChild(createRow('Types', org.types || '—'));
             body.appendChild(createRow('Status', org.status || '—'));
+            const acronymValues = splitAndCleanValues(orgAcronyms, /\s*;\s*/);
+            const aliasValues = splitAndCleanValues(orgAliases, /\s*;\s*/);
+            const labelValues = splitAndCleanValues(orgLabels, /\s*;\s*/);
+            const nameBaseValues = acronymValues.concat(aliasValues).concat(
+                labelValues.filter(label =>
+                    !acronymValues.some(acronym => acronym.toLowerCase() === label.toLowerCase())
+                    && !aliasValues.some(alias => alias.toLowerCase() === label.toLowerCase())
+                )
+            );
+            const alternativeNameValues = nameBaseValues;
+            body.appendChild(createRow('Alternative names', alternativeNameValues.length ? makeInlineList(alternativeNameValues) : '—'));
+            const domainValues = splitAndCleanValues(orgDomains, /\s*;\s*/);
+            body.appendChild(createRow('Domains', domainValues.length ? makeInlineList(domainValues) : '—'));
+
+            const metadataNode = document.createElement('span');
+            const coordinateText = hasCoordinates
+                ? `${lat.toFixed(6)}, ${lng.toFixed(6)}`
+                : '—';
+            metadataNode.appendChild(document.createTextNode(`Coordinates: ${coordinateText}`));
+            if (orgGeonamesId) {
+                metadataNode.appendChild(document.createTextNode(' · GeoNames: '));
+                metadataNode.appendChild(makeLink(`https://www.geonames.org/${encodeURIComponent(orgGeonamesId)}`, orgGeonamesId));
+            }
+            body.appendChild(createRow('Geographic metadata', metadataNode));
+
+            const idsNode = document.createElement('span');
+            let hasAnyExternalId = false;
+            if (orgWikidataId) {
+                hasAnyExternalId = true;
+                idsNode.appendChild(document.createTextNode('Wikidata: '));
+                idsNode.appendChild(makeLink(`https://www.wikidata.org/wiki/${encodeURIComponent(orgWikidataId)}`, orgWikidataId));
+            }
+            if (orgIsni) {
+                if (hasAnyExternalId) idsNode.appendChild(document.createTextNode(' · '));
+                hasAnyExternalId = true;
+                idsNode.appendChild(document.createTextNode(`ISNI: ${orgIsni}`));
+            }
+            if (orgCrossrefFunderId) {
+                if (hasAnyExternalId) idsNode.appendChild(document.createTextNode(' · '));
+                hasAnyExternalId = true;
+                idsNode.appendChild(document.createTextNode(`Crossref Funder ID: ${orgCrossrefFunderId}`));
+            }
+            if (orgGridId) {
+                if (hasAnyExternalId) idsNode.appendChild(document.createTextNode(' · '));
+                hasAnyExternalId = true;
+                idsNode.appendChild(document.createTextNode(`GRID: ${orgGridId}`));
+            }
+            body.appendChild(createRow('External identifiers', hasAnyExternalId ? idsNode : '—'));
+
+            const adminNode = document.createElement('span');
+            const createdText = orgCreatedSchemaVersion
+                ? `${orgCreatedDate || '—'} (schema ${orgCreatedSchemaVersion})`
+                : (orgCreatedDate || '—');
+            const lastModifiedText = orgLastModifiedSchemaVersion
+                ? `${orgLastModifiedDate || '—'} (schema ${orgLastModifiedSchemaVersion})`
+                : (orgLastModifiedDate || '—');
+            adminNode.textContent = `Created: ${createdText} · Last modified: ${lastModifiedText}`;
+            body.appendChild(createRow('Administrative data', adminNode));
 
             const safeWebsite = toSafeExternalUrl(org.website);
+            const safeWikipedia = toSafeExternalUrl(orgWikipedia);
             document.getElementById('modal-open-website').disabled = !safeWebsite;
             if (safeWebsite) {
                 body.appendChild(createRow('Website', makeLink(safeWebsite, 'Visit site')));
             } else if (org.website) {
                 body.appendChild(createRow('Website', 'Invalid or unsafe URL'));
             }
-
-            if (org.relationships) {
-                body.appendChild(createRow('Relationships', buildLinkifiedTextFragment(org.relationships)));
+            if (safeWikipedia) {
+                body.appendChild(createRow('Wikipedia', makeLink(safeWikipedia, 'Open page')));
+            } else if (orgWikipedia) {
+                body.appendChild(createRow('Wikipedia', 'Invalid or unsafe URL'));
             }
 
+            if (orgRelationships) {
+                const relationshipGroups = parseRelationshipGroups(orgRelationships);
+                const hierarchyOrder = ['parent', 'child', 'successor', 'predecessor', 'related'];
+                const orderedTypes = hierarchyOrder.filter(type => Array.isArray(relationshipGroups[type]) && relationshipGroups[type].length);
+                const remainingTypes = Object.keys(relationshipGroups)
+                    .filter(type => !hierarchyOrder.includes(type))
+                    .sort();
+                const allTypes = orderedTypes.concat(remainingTypes);
+
+                const relationshipsNode = document.createElement('div');
+                for (let i = 0; i < allTypes.length; i++) {
+                    const type = allTypes[i];
+                    const wrapper = document.createElement('div');
+                    const heading = document.createElement('strong');
+                    heading.textContent = `${formatRelationshipType(type)} (${relationshipTypeLabel(type)}): `;
+                    wrapper.appendChild(heading);
+                    const joined = relationshipGroups[type].join(', ');
+                    wrapper.appendChild(buildLinkifiedTextFragment(joined));
+                    relationshipsNode.appendChild(wrapper);
+                }
+                body.appendChild(createRow('Relationship hierarchy', relationshipsNode));
+            }
+
+            updateModalNavigationButtons(index);
             modal.style.display = 'flex';
         }
 
         function closeModal() {
             currentModalOrgIndex = -1;
             document.getElementById('modal-open-website').disabled = true;
+            const prevButton = document.getElementById('modal-nav-prev');
+            const nextButton = document.getElementById('modal-nav-next');
+            if (prevButton) prevButton.disabled = true;
+            if (nextButton) nextButton.disabled = true;
             document.getElementById('modal').style.display = 'none';
         }
 
         // Keyboard escape support
         document.addEventListener('keydown', e => {
-            if (e.key === "Escape") closeModal();
+            if (e.key === 'Escape') {
+                closeModal();
+                return;
+            }
+
+            const modal = document.getElementById('modal');
+            if (!modal || modal.style.display !== 'flex') return;
+
+            if (e.key === 'ArrowLeft') {
+                e.preventDefault();
+                navigateModal(-1);
+            } else if (e.key === 'ArrowRight') {
+                e.preventDefault();
+                navigateModal(1);
+            }
         });
 
         // Initialise
