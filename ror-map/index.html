@@ -3967,48 +3967,37 @@
             if (!Number.isInteger(index) || index < 0 || index >= organizations.length) {
                 return context;
             }
-
-            if (filteredOrganizationCount > 0) {
-                context.total = filteredOrganizationCount;
-                for (let i = 0; i < filteredOrganizationCount; i++) {
-                    if (filteredOrganizationIndexes[i] !== index) continue;
-                    context.position = i;
-                    context.previous = i > 0 ? filteredOrganizationIndexes[i - 1] : null;
-                    context.next = i < filteredOrganizationCount - 1 ? filteredOrganizationIndexes[i + 1] : null;
-                    return context;
-                }
+            if (!map || typeof map.getBounds !== 'function') {
+                return context;
             }
 
+            const bounds = map.getBounds();
             let previous = null;
             let foundCurrent = false;
-            let position = -1;
             let total = 0;
 
-            for (let i = 0; i < organizations.length; i++) {
-                const org = organizations[i];
+            for (let i = 0; i < filteredOrganizationCount; i++) {
+                const candidateIndex = filteredOrganizationIndexes[i];
+                const org = organizations[candidateIndex];
                 if (!org || !Number.isFinite(org.lat) || !Number.isFinite(org.lng)) continue;
-                if (i === index) {
+                if (!bounds.contains([org.lat, org.lng])) continue;
+
+                if (candidateIndex === index) {
                     foundCurrent = true;
-                    position = total;
+                    context.position = total;
                 } else if (!foundCurrent) {
-                    previous = i;
+                    previous = candidateIndex;
                 } else if (context.next === null) {
-                    context.next = i;
+                    context.next = candidateIndex;
                 }
+
                 total++;
             }
 
             if (foundCurrent) {
                 context.total = total;
-                context.position = position;
                 context.previous = previous;
-                return context;
             }
-
-            context.total = organizations.length;
-            context.position = index;
-            context.previous = index > 0 ? index - 1 : null;
-            context.next = index < organizations.length - 1 ? index + 1 : null;
             return context;
         }
 
@@ -4028,10 +4017,6 @@
             const targetIndex = step < 0 ? context.previous : context.next;
             if (!Number.isInteger(targetIndex)) return;
             showModal(targetIndex);
-            const targetOrg = organizations[targetIndex];
-            if (map && targetOrg && Number.isFinite(targetOrg.lat) && Number.isFinite(targetOrg.lng)) {
-                map.panTo([targetOrg.lat, targetOrg.lng]);
-            }
         }
 
         function updateFilterBadges() {
@@ -4300,6 +4285,9 @@
             });
             markerCluster.on('click', handleMarkerClick);
             map.addLayer(markerCluster);
+            map.on('moveend zoomend', () => {
+                if (currentModalOrgIndex >= 0) updateModalNavigationButtons(currentModalOrgIndex);
+            });
 
             setupUpload();
             attachFilterEvents();
