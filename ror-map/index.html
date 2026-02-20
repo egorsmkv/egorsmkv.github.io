@@ -294,6 +294,23 @@
             font-size: 1.35rem;
             color: #0066cc;
         }
+        .modal-header-actions {
+            margin-top: 10px;
+        }
+        .modal-header-actions button {
+            border: 1px solid rgba(0,0,0,0.2);
+            border-radius: 6px;
+            padding: 6px 10px;
+            background: #fff;
+            color: #0a3d7d;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+        .modal-header-actions button:disabled {
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
         .modal-body {
             padding: 20px 24px;
             line-height: 1.5;
@@ -512,6 +529,9 @@
             <span class="close-btn" id="modal-close-x">×</span>
             <div class="modal-header">
                 <h2 id="modal-name"></h2>
+                <div class="modal-header-actions">
+                    <button type="button" id="modal-openalex-search">OpenAlex search</button>
+                </div>
             </div>
             <div class="modal-body" id="modal-body"></div>
             <div class="modal-footer">
@@ -3787,6 +3807,77 @@
             return raw.replace(/^https?:\/\/ror\.org\//i, '').toLowerCase();
         }
 
+        function extractOpenAlexInstitutionId(value) {
+            const raw = String(value || '').trim();
+            if (!raw) return '';
+            const match = raw.match(/(?:openalex\.org\/)?([iI]\d+)$/);
+            return match ? match[1].toLowerCase() : '';
+        }
+
+        function findOpenAlexInstitutionIdInWork(work, normalizedRorId) {
+            if (!work || !normalizedRorId) return '';
+            const candidates = [];
+
+            if (Array.isArray(work.institutions)) {
+                candidates.push(...work.institutions);
+            }
+            if (Array.isArray(work.authorships)) {
+                for (let i = 0; i < work.authorships.length; i++) {
+                    const authorship = work.authorships[i];
+                    if (!authorship || !Array.isArray(authorship.institutions)) continue;
+                    candidates.push(...authorship.institutions);
+                }
+            }
+
+            for (let i = 0; i < candidates.length; i++) {
+                const institution = candidates[i];
+                if (!institution) continue;
+                const institutionRorId = normalizeRorId(institution.ror);
+                if (institutionRorId !== normalizedRorId) continue;
+
+                const directId = extractOpenAlexInstitutionId(institution.id);
+                if (directId) return directId;
+
+                if (Array.isArray(institution.lineage)) {
+                    for (let lineageIndex = institution.lineage.length - 1; lineageIndex >= 0; lineageIndex--) {
+                        const lineageId = extractOpenAlexInstitutionId(institution.lineage[lineageIndex]);
+                        if (lineageId) return lineageId;
+                    }
+                }
+            }
+
+            return '';
+        }
+
+        async function resolveOpenAlexInstitutionIdForRor(fullRorId) {
+            const normalizedRorId = normalizeRorId(fullRorId);
+            if (!normalizedRorId) return '';
+            const canonicalRorId = `https://ror.org/${normalizedRorId}`;
+            const apiUrl = new URL('https://api.openalex.org/works');
+            apiUrl.searchParams.set('filter', `institutions.ror:${canonicalRorId}`);
+            apiUrl.searchParams.set('per_page', '1');
+
+            const response = await fetch(apiUrl.toString());
+            if (!response.ok) throw new Error(`OpenAlex request failed: ${response.status}`);
+            const payload = await response.json();
+            const results = payload && Array.isArray(payload.results) ? payload.results : [];
+
+            for (let i = 0; i < results.length; i++) {
+                const institutionId = findOpenAlexInstitutionIdInWork(results[i], normalizedRorId);
+                if (institutionId) return institutionId;
+            }
+
+            return '';
+        }
+
+        function buildOpenAlexWorksUrl(institutionId) {
+            const url = new URL('https://openalex.org/works');
+            url.searchParams.set('page', '1');
+            url.searchParams.set('filter', `authorships.institutions.lineage:${institutionId}`);
+            url.searchParams.set('sort', 'publication_year:desc');
+            return url.toString();
+        }
+
         function getOrgIndexByIdMap() {
             if (orgIndexById) return orgIndexById;
             const indexById = new Map();
@@ -4253,6 +4344,33 @@
                 if (!safeUrl) return;
                 window.open(safeUrl, '_blank', 'noopener,noreferrer');
             });
+            document.getElementById('modal-openalex-search').addEventListener('click', async () => {
+                const button = document.getElementById('modal-openalex-search');
+                const org = organizations[currentModalOrgIndex];
+                if (!button || !org) return;
+
+                const originalLabel = 'OpenAlex search';
+                const lookupLabel = 'Finding OpenAlex ID...';
+                const lookupOrgIndex = currentModalOrgIndex;
+                button.disabled = true;
+                button.textContent = lookupLabel;
+
+                try {
+                    const institutionId = await resolveOpenAlexInstitutionIdForRor(getFullRorId(org));
+                    if (!institutionId) {
+                        console.warn('OpenAlex institution ID was not found for ROR:', getFullRorId(org));
+                        return;
+                    }
+                    const targetUrl = buildOpenAlexWorksUrl(institutionId);
+                    window.open(targetUrl, '_blank', 'noopener,noreferrer');
+                } catch (error) {
+                    console.error('OpenAlex lookup failed:', error);
+                } finally {
+                    if (currentModalOrgIndex !== lookupOrgIndex) return;
+                    button.textContent = originalLabel;
+                    button.disabled = false;
+                }
+            });
         }
 
         function setupFilterModalActions() {
@@ -4388,6 +4506,11 @@
 
             currentModalOrgIndex = index;
             nameEl.textContent = org.name || org.id || 'Organization';
+            const openAlexButton = document.getElementById('modal-openalex-search');
+            if (openAlexButton) {
+                openAlexButton.textContent = 'OpenAlex search';
+                openAlexButton.disabled = !normalizeRorId(org.id);
+            }
             const fullId = getFullRorId(org);
             const lat = Number(org.lat);
             const lng = Number(org.lng);
@@ -4586,6 +4709,11 @@
         function closeModal() {
             currentModalOrgIndex = -1;
             document.getElementById('modal-open-website').disabled = true;
+            const openAlexButton = document.getElementById('modal-openalex-search');
+            if (openAlexButton) {
+                openAlexButton.textContent = 'OpenAlex search';
+                openAlexButton.disabled = true;
+            }
             const prevButton = document.getElementById('modal-nav-prev');
             const nextButton = document.getElementById('modal-nav-next');
             if (prevButton) prevButton.disabled = true;
