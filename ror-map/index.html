@@ -3505,7 +3505,7 @@
         }
 
         function setupAutoDownload() {
-            const ZENODO_EXPORT_URL = 'https://zenodo.org/api/records/18419061';
+            const ZENODO_EXPORT_URL = 'https://zenodo.org/api/records/18419061/files';
             const btn = document.getElementById('auto-download-btn');
             const status = document.getElementById('auto-download-status');
             const spinner = document.getElementById('auto-download-spinner');
@@ -3525,11 +3525,11 @@
                     if (!metaResp.ok) throw new Error(`Metadata fetch failed: ${metaResp.status}`);
                     const meta = await metaResp.json();
 
-                    const files = meta && meta.files;
-                    if (!files || !Array.isArray(files)) throw new Error('Unexpected metadata format.');
+                    const entries = meta && meta.entries;
+                    if (!entries || !Array.isArray(entries)) throw new Error('Unexpected metadata format.');
 
                     let contentUrl = null;
-                    for (const file of files) {
+                    for (const file of entries) {
                         if (file.key && file.key.endsWith('.zip') && file.links && file.links.content) {
                             contentUrl = file.links.content;
                             break;
