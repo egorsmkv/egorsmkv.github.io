@@ -533,16 +533,17 @@
             <div class="modal-header">
                 <h2 id="modal-name"></h2>
                 <div class="modal-header-actions">
-                    <button type="button" id="modal-openalex-search">OpenAlex search</button>
-                    <button type="button" id="modal-openaire-search">OpenAIRE search</button>
-                    <button type="button" id="modal-lens-search">Lens search</button>
+                    <button type="button" id="modal-openalex-search">OpenAlex</button>
+                    <button type="button" id="modal-openaire-search">OpenAIRE</button>
+                    <button type="button" id="modal-lens-search">Lens</button>
                 </div>
             </div>
             <div class="modal-body" id="modal-body"></div>
             <div class="modal-footer">
-                <button type="button" id="modal-copy-ror">Copy ROR ID</button>
                 <button type="button" id="modal-open-website" disabled>Open website safely</button>
-                <button type="button" id="modal-close-btn" class="primary">Close</button>
+                <button type="button" id="modal-chat-ai" disabled>Find info</button>
+                <button type="button" id="modal-find-people" disabled>Find people</button>
+                <button type="button" id="modal-find-repositories" disabled>Find repositories</button>
             </div>
         </div>
         <button type="button" id="modal-nav-next" class="modal-nav-arrow modal-nav-next" aria-label="Next organization" title="Next organization" disabled>›</button>
@@ -3884,10 +3885,8 @@
         }
 
         function buildOpenAireOrganizationUrl(fullRorId) {
-            const url = new URL('https://explore.openaire.eu/search/advanced/organizations');
-            url.searchParams.set('f0', 'pid');
-            url.searchParams.set('fv0', encodeURIComponent(fullRorId));
-            return url.toString();
+            const pidValue = String(fullRorId || '').trim().replace(/\//g, '%2F');
+            return `https://explore.openaire.eu/search/organization?pid=${pidValue}`;
         }
 
         function buildLensScholarUrl(institutionName) {
@@ -3908,6 +3907,104 @@
             url.searchParams.set('useAuthorId', 'false');
             url.searchParams.set('institution.must', String(institutionName || '').trim());
             return url.toString();
+        }
+
+        function buildAiPromptForOrganization(org) {
+            const orgMeta = getOrganizationMeta(org);
+            const orgAcronyms = splitAndCleanValues(orgMeta.acronyms || '', /\s*;\s*/);
+            const orgAliases = splitAndCleanValues(orgMeta.aliases || '', /\s*;\s*/);
+            const orgLabels = splitAndCleanValues(orgMeta.labels || '', /\s*;\s*/);
+            const aliasValues = orgAcronyms.concat(orgAliases).concat(
+                orgLabels.filter(label =>
+                    !orgAcronyms.some(acronym => acronym.toLowerCase() === label.toLowerCase())
+                    && !orgAliases.some(alias => alias.toLowerCase() === label.toLowerCase())
+                )
+            );
+            const lat = Number(org.lat);
+            const lng = Number(org.lng);
+            const hasCoordinates = Number.isFinite(lat) && Number.isFinite(lng);
+            const coordinateText = hasCoordinates ? `${lat.toFixed(6)}, ${lng.toFixed(6)}` : '—';
+            const fullRorId = getFullRorId(org);
+            const safeWebsite = toSafeExternalUrl(org.website);
+            const safeWikipedia = toSafeExternalUrl(orgMeta.wikipedia || '');
+            const websiteText = safeWebsite || String(org.website || '').trim() || '—';
+            const wikipediaText = safeWikipedia || String(orgMeta.wikipedia || '').trim() || '—';
+            const lines = [
+                `Organization name: ${org.name || '—'}`,
+                `Aliases: ${aliasValues.length ? aliasValues.join('; ') : '—'}`,
+                `ROR ID: ${fullRorId}`,
+                `Location: ${org.city || '—'}, ${org.country || '—'}`,
+                `Coordinates: ${coordinateText}`,
+                `Wikidata: ${orgMeta.wikidataId || '—'}`,
+                `ISNI: ${orgMeta.isni || '—'}`,
+                `GRID: ${orgMeta.gridId || '—'}`,
+                `Website: ${websiteText}`,
+                `Wikipedia: ${wikipediaText}`,
+                'User goal: tell me what this org is known for; how to contact; official website, aliases, identifiers, and notable research areas; verify identifiers.'
+            ];
+            return lines.join('\n');
+        }
+
+        function buildFindPeoplePromptForOrganization(org) {
+            const orgMeta = getOrganizationMeta(org);
+            const orgAcronyms = splitAndCleanValues(orgMeta.acronyms || '', /\s*;\s*/);
+            const orgAliases = splitAndCleanValues(orgMeta.aliases || '', /\s*;\s*/);
+            const orgLabels = splitAndCleanValues(orgMeta.labels || '', /\s*;\s*/);
+            const aliasValues = orgAcronyms.concat(orgAliases).concat(
+                orgLabels.filter(label =>
+                    !orgAcronyms.some(acronym => acronym.toLowerCase() === label.toLowerCase())
+                    && !orgAliases.some(alias => alias.toLowerCase() === label.toLowerCase())
+                )
+            );
+            const fullRorId = getFullRorId(org);
+            const lines = [
+                `Find notable people affiliated with this organization.`,
+                `Organization: ${org.name || '—'}`,
+                `Aliases: ${aliasValues.length ? aliasValues.join('; ') : '—'}`,
+                `ROR ID: ${fullRorId}`,
+                `Location: ${org.city || '—'}, ${org.country || '—'}`,
+                `Website: ${org.website || '—'}`,
+                `Wikipedia: ${orgMeta.wikipedia || '—'}`,
+                `Wikidata: ${orgMeta.wikidataId || '—'}`,
+                `ISNI: ${orgMeta.isni || '—'}`,
+                `GRID: ${orgMeta.gridId || '—'}`,
+                'Please list people with role/title, why they are linked to this organization, and source links.'
+            ];
+            return lines.join('\n');
+        }
+
+        function buildGAiUrlForPrompt(prompt) {
+            const url = new URL('https://g.ai/');
+            url.searchParams.set('q', String(prompt || '').trim());
+            return url.toString();
+        }
+
+        function buildFindRepositoriesPromptForOrganization(org) {
+            const orgMeta = getOrganizationMeta(org);
+            const orgAcronyms = splitAndCleanValues(orgMeta.acronyms || '', /\s*;\s*/);
+            const orgAliases = splitAndCleanValues(orgMeta.aliases || '', /\s*;\s*/);
+            const orgLabels = splitAndCleanValues(orgMeta.labels || '', /\s*;\s*/);
+            const aliasValues = orgAcronyms.concat(orgAliases).concat(
+                orgLabels.filter(label =>
+                    !orgAcronyms.some(acronym => acronym.toLowerCase() === label.toLowerCase())
+                    && !orgAliases.some(alias => alias.toLowerCase() === label.toLowerCase())
+                )
+            );
+            const fullRorId = getFullRorId(org);
+            const lines = [
+                'Find official repositories where this organization publishes or archives research outputs.',
+                `Organization: ${org.name || '—'}`,
+                `Aliases: ${aliasValues.length ? aliasValues.join('; ') : '—'}`,
+                `ROR ID: ${fullRorId}`,
+                `Location: ${org.city || '—'}, ${org.country || '—'}`,
+                `Website: ${org.website || '—'}`,
+                `Wikipedia: ${orgMeta.wikipedia || '—'}`,
+                `Wikidata: ${orgMeta.wikidataId || '—'}`,
+                `ISNI: ${orgMeta.isni || '—'}`,
+                `GRID: ${orgMeta.gridId || '—'}`,
+                'Return repository names, URLs, whether they are official institutional repositories, what they host, and source links.'
+            ];
+            return lines.join('\n');
         }
 
         function getOrgIndexByIdMap() {
@@ -4348,26 +4445,8 @@
             if (prev) prev.addEventListener('click', () => navigateModal(-1));
             if (next) next.addEventListener('click', () => navigateModal(1));
             document.getElementById('modal-close-x').addEventListener('click', close);
-            document.getElementById('modal-close-btn').addEventListener('click', close);
             modal.addEventListener('click', event => {
                 if (event.target === modal) closeModal();
-            });
-            document.getElementById('modal-copy-ror').addEventListener('click', async () => {
-                const org = organizations[currentModalOrgIndex];
-                if (!org) return;
-                const value = getFullRorId(org);
-                try {
-                    if (navigator.clipboard && navigator.clipboard.writeText) {
-                        await navigator.clipboard.writeText(value);
-                    } else {
-                        const area = document.createElement('textarea');
-                        area.value = value;
-                        document.body.appendChild(area);
-                        area.select();
-                        document.execCommand('copy');
-                        area.remove();
-                    }
-                } catch {}
             });
             document.getElementById('modal-open-website').addEventListener('click', () => {
                 const org = organizations[currentModalOrgIndex];
@@ -4376,12 +4455,33 @@
                 if (!safeUrl) return;
                 window.open(safeUrl, '_blank', 'noopener,noreferrer');
             });
+            document.getElementById('modal-chat-ai').addEventListener('click', () => {
+                const org = organizations[currentModalOrgIndex];
+                if (!org) return;
+                const prompt = buildAiPromptForOrganization(org);
+                const targetUrl = buildGAiUrlForPrompt(prompt);
+                window.open(targetUrl, '_blank', 'noopener,noreferrer');
+            });
+            document.getElementById('modal-find-people').addEventListener('click', () => {
+                const org = organizations[currentModalOrgIndex];
+                if (!org || !String(org.name || '').trim()) return;
+                const prompt = buildFindPeoplePromptForOrganization(org);
+                const targetUrl = buildGAiUrlForPrompt(prompt);
+                window.open(targetUrl, '_blank', 'noopener,noreferrer');
+            });
+            document.getElementById('modal-find-repositories').addEventListener('click', () => {
+                const org = organizations[currentModalOrgIndex];
+                if (!org || !String(org.name || '').trim()) return;
+                const prompt = buildFindRepositoriesPromptForOrganization(org);
+                const targetUrl = buildGAiUrlForPrompt(prompt);
+                window.open(targetUrl, '_blank', 'noopener,noreferrer');
+            });
             document.getElementById('modal-openalex-search').addEventListener('click', async () => {
                 const button = document.getElementById('modal-openalex-search');
                 const org = organizations[currentModalOrgIndex];
                 if (!button || !org) return;
 
-                const originalLabel = 'OpenAlex search';
+                const originalLabel = 'OpenAlex';
                 const lookupLabel = 'Finding OpenAlex ID...';
                 const lookupOrgIndex = currentModalOrgIndex;
                 button.disabled = true;
@@ -4552,7 +4652,7 @@
             nameEl.textContent = org.name || org.id || 'Organization';
             const openAlexButton = document.getElementById('modal-openalex-search');
             if (openAlexButton) {
-                openAlexButton.textContent = 'OpenAlex search';
+                openAlexButton.textContent = 'OpenAlex';
                 openAlexButton.disabled = !normalizeRorId(org.id);
             }
             const openAireButton = document.getElementById('modal-openaire-search');
@@ -4562,6 +4662,18 @@
             const lensButton = document.getElementById('modal-lens-search');
             if (lensButton) {
                 lensButton.disabled = !String(org.name || '').trim();
+            }
+            const chatAiButton = document.getElementById('modal-chat-ai');
+            if (chatAiButton) {
+                chatAiButton.disabled = false;
+            }
+            const findPeopleButton = document.getElementById('modal-find-people');
+            if (findPeopleButton) {
+                findPeopleButton.disabled = !String(org.name || '').trim();
+            }
+            const findRepositoriesButton = document.getElementById('modal-find-repositories');
+            if (findRepositoriesButton) {
+                findRepositoriesButton.disabled = !String(org.name || '').trim();
             }
             const fullId = getFullRorId(org);
             const lat = Number(org.lat);
@@ -4685,6 +4797,19 @@
 
             const idsNode = document.createElement('span');
             let hasAnyExternalId = false;
+            const normalizedIsni = String(orgIsni || '')
+                .trim()
+                .replace(/[^\dXx]/g, '')
+                .toUpperCase();
+            const gridQueryUrl = (() => {
+                const gridValue = String(orgGridId || '').trim();
+                if (!gridValue) return '';
+                const url = new URL('https://www.google.com/search');
+                url.searchParams.set('udm', '50');
+                url.searchParams.set('aep', '11');
+                url.searchParams.set('q', `"${gridValue}"`);
+                return url.toString();
+            })();
             if (orgWikidataId) {
                 hasAnyExternalId = true;
                 idsNode.appendChild(document.createTextNode('Wikidata: '));
@@ -4693,7 +4818,12 @@
             if (orgIsni) {
                 if (hasAnyExternalId) idsNode.appendChild(document.createTextNode(' · '));
                 hasAnyExternalId = true;
-                idsNode.appendChild(document.createTextNode(`ISNI: ${orgIsni}`));
+                if (normalizedIsni) {
+                    idsNode.appendChild(document.createTextNode('ISNI: '));
+                    idsNode.appendChild(makeLink(`https://isni.org/isni/${encodeURIComponent(normalizedIsni)}`, orgIsni));
+                } else {
+                    idsNode.appendChild(document.createTextNode(`ISNI: ${orgIsni}`));
+                }
             }
             if (orgCrossrefFunderId) {
                 if (hasAnyExternalId) idsNode.appendChild(document.createTextNode(' · '));
@@ -4703,7 +4833,12 @@
             if (orgGridId) {
                 if (hasAnyExternalId) idsNode.appendChild(document.createTextNode(' · '));
                 hasAnyExternalId = true;
-                idsNode.appendChild(document.createTextNode(`GRID: ${orgGridId}`));
+                if (gridQueryUrl) {
+                    idsNode.appendChild(document.createTextNode('GRID: '));
+                    idsNode.appendChild(makeLink(gridQueryUrl, orgGridId));
+                } else {
+                    idsNode.appendChild(document.createTextNode(`GRID: ${orgGridId}`));
+                }
             }
             body.appendChild(createRow('External identifiers', hasAnyExternalId ? idsNode : '—'));
 
@@ -4763,7 +4898,7 @@
             document.getElementById('modal-open-website').disabled = true;
             const openAlexButton = document.getElementById('modal-openalex-search');
             if (openAlexButton) {
-                openAlexButton.textContent = 'OpenAlex search';
+                openAlexButton.textContent = 'OpenAlex';
                 openAlexButton.disabled = true;
             }
             const openAireButton = document.getElementById('modal-openaire-search');
@@ -4773,6 +4908,18 @@
             const lensButton = document.getElementById('modal-lens-search');
             if (lensButton) {
                 lensButton.disabled = true;
+            }
+            const chatAiButton = document.getElementById('modal-chat-ai');
+            if (chatAiButton) {
+                chatAiButton.disabled = true;
+            }
+            const findPeopleButton = document.getElementById('modal-find-people');
+            if (findPeopleButton) {
+                findPeopleButton.disabled = true;
+            }
+            const findRepositoriesButton = document.getElementById('modal-find-repositories');
+            if (findRepositoriesButton) {
+                findRepositoriesButton.disabled = true;
             }
             const prevButton = document.getElementById('modal-nav-prev');
             const nextButton = document.getElementById('modal-nav-next');
