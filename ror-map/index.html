@@ -296,6 +296,9 @@
         }
         .modal-header-actions {
             margin-top: 10px;
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
         }
         .modal-header-actions button {
             border: 1px solid rgba(0,0,0,0.2);
@@ -531,6 +534,8 @@
                 <h2 id="modal-name"></h2>
                 <div class="modal-header-actions">
                     <button type="button" id="modal-openalex-search">OpenAlex search</button>
+                    <button type="button" id="modal-openaire-search">OpenAIRE search</button>
+                    <button type="button" id="modal-lens-search">Lens search</button>
                 </div>
             </div>
             <div class="modal-body" id="modal-body"></div>
@@ -3878,6 +3883,33 @@
             return url.toString();
         }
 
+        function buildOpenAireOrganizationUrl(fullRorId) {
+            const url = new URL('https://explore.openaire.eu/search/advanced/organizations');
+            url.searchParams.set('f0', 'pid');
+            url.searchParams.set('fv0', encodeURIComponent(fullRorId));
+            return url.toString();
+        }
+
+        function buildLensScholarUrl(institutionName) {
+            const url = new URL('https://www.lens.org/lens/search/scholar/list');
+            url.searchParams.set('p', '0');
+            url.searchParams.set('n', '10');
+            url.searchParams.set('s', 'date_published');
+            url.searchParams.set('d', '+');
+            url.searchParams.set('f', 'false');
+            url.searchParams.set('e', 'false');
+            url.searchParams.set('l', 'en');
+            url.searchParams.set('authorField', 'author');
+            url.searchParams.set('dateFilterField', 'publishedYear');
+            url.searchParams.set('orderBy', '+date_published');
+            url.searchParams.set('presentation', 'false');
+            url.searchParams.set('preview', 'true');
+            url.searchParams.set('stemmed', 'true');
+            url.searchParams.set('useAuthorId', 'false');
+            url.searchParams.set('institution.must', String(institutionName || '').trim());
+            return url.toString();
+        }
+
         function getOrgIndexByIdMap() {
             if (orgIndexById) return orgIndexById;
             const indexById = new Map();
@@ -4371,6 +4403,18 @@
                     button.disabled = false;
                 }
             });
+            document.getElementById('modal-openaire-search').addEventListener('click', () => {
+                const org = organizations[currentModalOrgIndex];
+                if (!org) return;
+                const targetUrl = buildOpenAireOrganizationUrl(getFullRorId(org));
+                window.open(targetUrl, '_blank', 'noopener,noreferrer');
+            });
+            document.getElementById('modal-lens-search').addEventListener('click', () => {
+                const org = organizations[currentModalOrgIndex];
+                if (!org || !String(org.name || '').trim()) return;
+                const targetUrl = buildLensScholarUrl(org.name);
+                window.open(targetUrl, '_blank', 'noopener,noreferrer');
+            });
         }
 
         function setupFilterModalActions() {
@@ -4510,6 +4554,14 @@
             if (openAlexButton) {
                 openAlexButton.textContent = 'OpenAlex search';
                 openAlexButton.disabled = !normalizeRorId(org.id);
+            }
+            const openAireButton = document.getElementById('modal-openaire-search');
+            if (openAireButton) {
+                openAireButton.disabled = !normalizeRorId(org.id);
+            }
+            const lensButton = document.getElementById('modal-lens-search');
+            if (lensButton) {
+                lensButton.disabled = !String(org.name || '').trim();
             }
             const fullId = getFullRorId(org);
             const lat = Number(org.lat);
@@ -4713,6 +4765,14 @@
             if (openAlexButton) {
                 openAlexButton.textContent = 'OpenAlex search';
                 openAlexButton.disabled = true;
+            }
+            const openAireButton = document.getElementById('modal-openaire-search');
+            if (openAireButton) {
+                openAireButton.disabled = true;
+            }
+            const lensButton = document.getElementById('modal-lens-search');
+            if (lensButton) {
+                lensButton.disabled = true;
             }
             const prevButton = document.getElementById('modal-nav-prev');
             const nextButton = document.getElementById('modal-nav-next');
