@@ -4783,36 +4783,50 @@
             body.appendChild(createRow('Location', locationNode));
 
             const mapsNode = document.createElement('div');
-            const osmLinkEl = makeLink(osmLink, 'OpenStreetMap');
-            osmLinkEl.addEventListener('click', async event => {
-                event.preventDefault();
-                const originalText = osmLinkEl.textContent;
-                osmLinkEl.textContent = '…';
-                osmLinkEl.setAttribute('aria-busy', 'true');
-                osmLinkEl.style.pointerEvents = 'none';
-                try {
-                    const coords = await resolveNominatimCoords(org.name, org.city, org.country);
-                    if (coords) {
-                        const { lat: nlat, lon: nlon } = coords;
-                        window.open(`https://www.openstreetmap.org/?mlat=${nlat}&mlon=${nlon}#map=16/${nlat}/${nlon}`, '_blank', 'noopener,noreferrer');
-                        return;
+            const makeNominatimMapLink = (label, fallbackUrl, buildUrl) => {
+                const linkEl = makeLink(fallbackUrl, label);
+                linkEl.addEventListener('click', async event => {
+                    event.preventDefault();
+                    const originalText = linkEl.textContent;
+                    linkEl.textContent = '…';
+                    linkEl.setAttribute('aria-busy', 'true');
+                    linkEl.style.pointerEvents = 'none';
+                    try {
+                        const coords = await resolveNominatimCoords(org.name, org.city, org.country);
+                        if (coords) {
+                            window.open(buildUrl(coords.lat, coords.lon), '_blank', 'noopener,noreferrer');
+                            return;
+                        }
+                    } catch (e) {
+                        console.warn('Nominatim lookup failed:', e);
+                    } finally {
+                        linkEl.textContent = originalText;
+                        linkEl.removeAttribute('aria-busy');
+                        linkEl.style.pointerEvents = '';
                     }
-                } catch (e) {
-                    console.warn('Nominatim lookup failed:', e);
-                } finally {
-                    osmLinkEl.textContent = originalText;
-                    osmLinkEl.removeAttribute('aria-busy');
-                    osmLinkEl.style.pointerEvents = '';
-                }
-                window.open(osmLink, '_blank', 'noopener,noreferrer');
-            });
-            mapsNode.appendChild(osmLinkEl);
+                    window.open(fallbackUrl, '_blank', 'noopener,noreferrer');
+                });
+                return linkEl;
+            };
+            mapsNode.appendChild(makeNominatimMapLink(
+                'OpenStreetMap', osmLink,
+                (nlat, nlon) => `https://www.openstreetmap.org/?mlat=${nlat}&mlon=${nlon}#map=16/${nlat}/${nlon}`
+            ));
             mapsNode.appendChild(document.createTextNode(' · '));
-            mapsNode.appendChild(makeLink(googleLink, 'Google Maps'));
+            mapsNode.appendChild(makeNominatimMapLink(
+                'Google Maps', googleLink,
+                (nlat, nlon) => `https://www.google.com/maps?q=${nlat},${nlon}`
+            ));
             mapsNode.appendChild(document.createTextNode(' · '));
-            mapsNode.appendChild(makeLink(appleLink, 'Apple Maps'));
+            mapsNode.appendChild(makeNominatimMapLink(
+                'Apple Maps', appleLink,
+                (nlat, nlon) => `https://maps.apple.com/?ll=${nlat},${nlon}&q=${placeQuery}`
+            ));
             mapsNode.appendChild(document.createTextNode(' · '));
-            mapsNode.appendChild(makeLink(bingLink, 'Bing Maps'));
+            mapsNode.appendChild(makeNominatimMapLink(
+                'Bing Maps', bingLink,
+                (nlat, nlon) => `https://www.bing.com/maps?cp=${nlat}~${nlon}&lvl=16`
+            ));
             body.appendChild(createRow('Map links', mapsNode));
 
             const orgMeta = getOrganizationMeta(org);
