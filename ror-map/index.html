@@ -514,6 +514,7 @@
                             <button type="button" id="spatial-clear">Clear selection</button>
                             <button type="button" id="spatial-clear-map">Clear map</button>
                             <button type="button" id="spatial-export-visible" data-primary="true">Export visible</button>
+                            <button type="button" id="spatial-find-correct-locations" data-primary="true">Find correct locations</button>
                         </div>
                         <span id="spatial-status" class="filter-note">No spatial selection active.</span>
                     </div>
@@ -4459,12 +4460,87 @@
             updateSpatialStatus(`Exported ${visibleCount} visible marker(s).`);
         }
 
+        async function findCorrectLocations() {
+            if (!map) return;
+            const btn = document.getElementById('spatial-find-correct-locations');
+            const bounds = map.getBounds();
+
+            const visibleIndexes = [];
+            for (let i = 0; i < filteredOrganizationCount; i++) {
+                const index = filteredOrganizationIndexes[i];
+                const org = organizations[index];
+                if (!org || !bounds.contains([org.lat, org.lng])) continue;
+                visibleIndexes.push(index);
+            }
+
+            if (visibleIndexes.length === 0) {
+                updateSpatialStatus('No visible markers to update.');
+                return;
+            }
+
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = 'Finding locations...';
+            }
+
+            let successCount = 0;
+            let consecutiveErrorCount = 0;
+            const BASE_DELAY_MS = 500;
+            let delayMs = BASE_DELAY_MS;
+            const MAX_ERRORS = 50;
+
+            for (let i = 0; i < visibleIndexes.length; i++) {
+                if (consecutiveErrorCount >= MAX_ERRORS) {
+                    updateSpatialStatus(`Too many errors (${MAX_ERRORS}). Showing partial data.`);
+                    break;
+                }
+
+                const index = visibleIndexes[i];
+                const org = organizations[index];
+
+                updateSpatialStatus(`Finding location ${i + 1} / ${visibleIndexes.length}…`);
+
+                if (i > 0) {
+                    await new Promise(resolve => setTimeout(resolve, delayMs));
+                }
+
+                try {
+                    const coords = await resolveNominatimCoords(org.name, org.city, org.country);
+                    if (coords) {
+                        org.lat = coords.lat;
+                        org.lng = coords.lon;
+                        successCount++;
+                    }
+                    consecutiveErrorCount = 0;
+                    delayMs = BASE_DELAY_MS;
+                } catch (e) {
+                    consecutiveErrorCount++;
+                    delayMs = Math.min(delayMs * 2, 8000);
+                    console.warn('Failed to resolve coordinates for', org.name, e);
+                }
+            }
+
+            applyFilters();
+
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = 'Find correct locations';
+            }
+
+            if (consecutiveErrorCount >= MAX_ERRORS) {
+                updateSpatialStatus(`Done (partial). Updated ${successCount} location(s), stopped after ${MAX_ERRORS} errors.`);
+            } else {
+                updateSpatialStatus(`Done. Updated ${successCount} / ${visibleIndexes.length} location(s).`);
+            }
+        }
+
         function attachSpatialEvents() {
             document.getElementById('spatial-bbox').addEventListener('click', () => startDrawMode('rectangle'));
             document.getElementById('spatial-lasso').addEventListener('click', () => startDrawMode('polygon'));
             document.getElementById('spatial-clear').addEventListener('click', clearSpatialSelection);
             document.getElementById('spatial-clear-map').addEventListener('click', resetAllFilters);
             document.getElementById('spatial-export-visible').addEventListener('click', exportVisibleMarkers);
+            document.getElementById('spatial-find-correct-locations').addEventListener('click', findCorrectLocations);
 
             if (!(window.L && L.Draw && map)) return;
             spatialDrawLayerGroup = new L.FeatureGroup();
