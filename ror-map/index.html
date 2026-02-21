@@ -4289,7 +4289,7 @@
             updateFilterBadges();
         }
 
-        function applyFilters() {
+        function applyFilters(preserveView = false) {
             const searchValue = normalize(document.getElementById('filter-search').value);
             const countryValues = collectSelectedValueSet('filter-country');
             const statusValues = collectSelectedValueSet('filter-status');
@@ -4349,7 +4349,7 @@
 
             document.getElementById('count').textContent = `${visibleCount} / ${totalOrganizations} organizations`;
 
-            if (visibleCount > 0) {
+            if (visibleCount > 0 && !preserveView) {
                 map.fitBounds(markerCluster.getBounds().pad(0.1));
             }
             if (currentModalOrgIndex >= 0) {
@@ -4586,7 +4586,7 @@
                 }
             }
 
-            applyFilters();
+            applyFilters(true);
 
             if (btn) {
                 btn.disabled = false;
