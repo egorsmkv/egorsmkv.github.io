@@ -140,6 +140,17 @@
                         Clear
                     </button>
                 </div>
+
+                <div id="dataset-stats" class="hidden mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div class="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+                        <div class="text-xs uppercase font-medium tracking-widest text-slate-500 mb-3">Source counts</div>
+                        <div id="source-stats" class="space-y-2"></div>
+                    </div>
+                    <div class="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+                        <div class="text-xs uppercase font-medium tracking-widest text-slate-500 mb-3">Annotation source counts</div>
+                        <div id="annotation-source-stats" class="space-y-2"></div>
+                    </div>
+                </div>
             </div>
 
             <!-- File selector + Image upload (with inference) -->
@@ -444,6 +455,43 @@
             return Array.isArray(value) ? value.join('\n') : String(value || '')
         }
 
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;')
+        }
+
+        function countByField(entries, fieldName) {
+            return entries.reduce((counts, entry) => {
+                const rawValue = entry?.[fieldName]
+                const value = rawValue === undefined || rawValue === null || rawValue === '' ? '— missing —' : String(rawValue)
+                counts.set(value, (counts.get(value) || 0) + 1)
+                return counts
+            }, new Map())
+        }
+
+        function renderCountStats(containerId, counts) {
+            const container = document.getElementById(containerId)
+            const rows = [...counts.entries()]
+                .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+
+            container.innerHTML = rows.map(([label, count]) => `
+                <div class="flex items-center justify-between gap-x-4 text-sm">
+                    <span class="font-medium text-slate-700 truncate" title="${escapeHtml(label)}">${escapeHtml(label)}</span>
+                    <span class="font-mono text-slate-500 bg-white border border-slate-200 rounded-xl px-2.5 py-0.5">${count}</span>
+                </div>
+            `).join('') || `<div class="text-sm text-slate-400">No values found.</div>`
+        }
+
+        function renderDatasetStats() {
+            renderCountStats('source-stats', countByField(dataset, 'source'))
+            renderCountStats('annotation-source-stats', countByField(dataset, 'annotation_source'))
+            document.getElementById('dataset-stats').classList.remove('hidden')
+        }
+
         function normalizeTextValue(value) {
             const parsed = parseJsonMaybe(value)
             if (parsed === undefined || parsed === null || parsed === '') return ''
@@ -709,7 +757,7 @@
             title.textContent = `Region ${index + 1} • ${region.type || 'region'}`
             subtitle.textContent = `${Math.round(x1)}, ${Math.round(y1)} → ${Math.round(x2)}, ${Math.round(y2)} • ${width}×${height}px`
             zoomText.textContent = region.text || 'No text metadata for this region.'
-            zoomMeta.textContent = `${region.language || '—'} • ${region.legibility || '—'}`
+            zoomMeta.textContent = `${region.language || '—'} • ${region.legibility || '—'} • annotation_source: ${region.annotation_source || currentEntry?.annotation_source || '—'}`
             modal.classList.remove('hidden')
             document.body.classList.add('overflow-hidden')
         }
@@ -854,11 +902,7 @@
                 div.style.borderLeftColor = color
                 div.dataset.index = index
                 
-                const escapedText = (region.text || '')
-                    .replace(/\\n/g, '\n')
-                    .replace(/&/g, '&amp;')
-                    .replace(/</g, '&lt;')
-                    .replace(/>/g, '&gt;')
+                const escapedText = escapeHtml(region.text || '').replace(/\\n/g, '\n')
                 
                 div.innerHTML = `
                     <div class="flex items-start justify-between">
@@ -941,6 +985,7 @@
                     document.getElementById('file-count').innerHTML = `
                         <span class="px-2.5 py-px bg-emerald-200 text-emerald-800 rounded-2xl font-semibold">${dataset.length}</span>
                     `
+                    renderDatasetStats()
                     document.getElementById('upload-step').classList.add('opacity-75')
                     
                     populateFileSelector()
@@ -958,6 +1003,9 @@
             dataset = []
             currentEntry = null
             document.getElementById('json-status').classList.add('hidden')
+            document.getElementById('dataset-stats').classList.add('hidden')
+            document.getElementById('source-stats').innerHTML = ''
+            document.getElementById('annotation-source-stats').innerHTML = ''
             document.getElementById('upload-step').classList.remove('opacity-75')
             document.getElementById('selector-panel').classList.add('hidden')
             document.getElementById('viewer-section').classList.add('hidden')
