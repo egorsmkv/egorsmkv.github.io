@@ -1,0 +1,1120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Region Viewer • JSONL Dataset Explorer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500&amp;family=Space+Grotesk:wght@500&amp;display=swap');
+        
+        :root {
+            --tw-color-primary: #3b82f6;
+        }
+        
+        * {
+            transition-property: color, background-color, border-color, text-decoration-color, fill, stroke;
+            transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+            transition-duration: 150ms;
+        }
+        
+        #image-wrapper {
+            position: relative;
+            display: inline-block;
+            box-shadow: 0 18px 40px -24px rgb(15 23 42 / 0.28);
+            border-radius: 16px;
+            overflow: hidden;
+            background: #fff;
+        }
+        
+        #overlays {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+        }
+        
+        .region-box {
+            position: absolute;
+            border: 3px solid;
+            border-radius: 6px;
+            box-shadow: 0 0 0 3px rgba(255,255,255,0.6);
+            cursor: pointer;
+            pointer-events: auto;
+            box-sizing: border-box;
+        }
+        
+        .region-box:hover {
+            box-shadow: 0 0 0 6px rgba(255,255,255,0.8);
+            transform: scale(1.02);
+        }
+        
+        .annotation-item {
+            border-left: 5px solid;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .highlighted {
+            background-color: #fefce8 !important;
+            border-color: #eab308 !important;
+            box-shadow: 0 10px 15px -3px rgb(234 179 8);
+            transform: translateY(-1px);
+        }
+        
+        .text-container pre {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        
+        .file-list::-webkit-scrollbar {
+            height: 6px;
+        }
+        
+        .inference-badge {
+            animation: ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+        }
+
+        #zoom-canvas {
+            image-rendering: auto;
+            max-width: calc(100vw - 96px);
+            max-height: 62vh;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900">
+    <div class="max-w-screen-2xl mx-auto">
+        <!-- Header -->
+        <div class="bg-white/95 border-b border-slate-200 px-8 py-6 flex items-center justify-between sticky top-0 z-50 shadow-sm backdrop-blur">
+            <div class="flex items-center gap-x-3">
+                <div class="w-9 h-9 bg-blue-600 rounded-2xl flex items-center justify-center text-white text-xl font-bold">📍</div>
+                <h1 class="text-3xl font-semibold tracking-[-1px]" style="font-family: 'Space Grotesk', sans-serif;">
+                    Region Viewer
+                </h1>
+                <span class="px-3 py-0.5 text-xs font-medium bg-blue-100 text-blue-700 rounded-3xl">JSONL • Image Annotations</span>
+            </div>
+            
+            <div class="flex items-center gap-x-8 text-sm">
+                <div class="flex items-center gap-x-2">
+                    <div class="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></div>
+                    <span class="font-medium">Ready for local files</span>
+                </div>
+                <a href="#" onclick="window.location.reload()" 
+                   class="flex items-center gap-x-2 text-slate-500 hover:text-slate-700">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.058 11H1M12 3v2m0 16v2m9-9H15m-6 0a8 8 0 01-7.714-6.364M12 19.5a7.5 7.5 0 01-7.5-7.5" />
+                    </svg>
+                    <span>Reset</span>
+                </a>
+            </div>
+        </div>
+
+        <div class="p-8">
+            <!-- Upload JSONL -->
+            <div id="upload-step" class="bg-white rounded-3xl shadow-sm border border-slate-200 p-8 mb-8">
+                <div class="flex items-center justify-between mb-6">
+                    <div>
+                        <h2 class="text-2xl font-semibold mb-1">Step 1: Load your JSONL dataset</h2>
+                        <p class="text-slate-500">Each line is a JSON object with <code class="bg-slate-100 px-1.5 py-px rounded">file_name</code>, dimensions, and <code class="bg-slate-100 px-1.5 py-px rounded">regions</code> array.</p>
+                    </div>
+                    <label id="json-upload-label"
+                           class="cursor-pointer flex items-center justify-center gap-x-3 bg-blue-600 hover:bg-blue-700 text-white px-6 h-12 rounded-2xl font-medium shadow-sm">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v-4m0 0l4 4m-4-4l4-4m12 0v4m0 0l-4-4m4 4l-4 4" />
+                        </svg>
+                        <span>Upload JSONL file</span>
+                        <input type="file" id="jsonl-input" accept=".jsonl" class="hidden">
+                    </label>
+                </div>
+                
+                <div id="json-status" class="hidden flex items-center gap-x-3 bg-emerald-50 text-emerald-700 px-4 h-12 rounded-2xl">
+                    <div class="flex-1 flex items-center gap-x-2">
+                        <span id="file-count" class="font-mono font-semibold"></span>
+                        <span class="text-emerald-600">entries loaded • filename inference enabled</span>
+                    </div>
+                    <button onclick="clearDataset()" 
+                            class="text-xs px-4 h-8 bg-white rounded-2xl border border-emerald-200 text-emerald-700 hover:border-emerald-300">
+                        Clear
+                    </button>
+                </div>
+            </div>
+
+            <!-- File selector + Image upload (with inference) -->
+            <div id="selector-panel" class="hidden bg-white rounded-3xl shadow-sm border border-slate-200 p-8 mb-8">
+                <div class="grid grid-cols-1 md:grid-cols-12 gap-6 items-end">
+                    <!-- File name selector -->
+                    <div class="md:col-span-7">
+                        <label class="block text-xs uppercase font-medium tracking-widest text-slate-500 mb-2">Select file from dataset (optional)</label>
+                        <div class="flex gap-x-3">
+                            <select id="file-select" 
+                                    class="flex-1 bg-white focus:bg-white border border-slate-200 focus:border-blue-300 rounded-3xl px-5 h-14 text-lg font-medium outline-none shadow-sm">
+                                <!-- populated by JS -->
+                            </select>
+                            
+                            <div class="text-xs bg-slate-50 border border-slate-200 rounded-3xl px-5 flex items-center font-mono text-slate-400 whitespace-nowrap">
+                                <span id="expected-name" class="font-semibold text-slate-600"></span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Image upload with inference -->
+                    <div class="md:col-span-5">
+                        <label class="block text-xs uppercase font-medium tracking-widest text-slate-500 mb-2">Upload image <span class="text-emerald-600 font-medium">(auto-infers filename from JSONL)</span></label>
+                        <div class="flex gap-x-3">
+                            <label class="cursor-pointer flex-1 flex items-center justify-center gap-x-3 border-2 border-dashed border-slate-300 hover:border-blue-300 rounded-3xl px-6 h-14 bg-white hover:bg-blue-50">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16V4a2 2 0 01-2-2H6a2 2 0 01-2 2v12a2 2 0 01-2 2z" />
+                                </svg>
+                                <div>
+                                    <span class="font-medium text-slate-700">Choose JPG / PNG • auto-detects entry</span>
+                                </div>
+                                <input type="file" id="image-input" accept="image/*" class="hidden">
+                            </label>
+                            <div id="image-name-badge" class="hidden text-xs flex items-center px-4 bg-emerald-100 text-emerald-700 rounded-3xl font-medium">
+                                ✅ Image loaded
+                            </div>
+                        </div>
+                        <p id="inference-status" class="hidden mt-2 text-xs text-emerald-600 flex items-center gap-x-1">
+                            <span class="inline-block w-2 h-2 bg-emerald-400 rounded-full inference-badge"></span>
+                            Filename matched automatically
+                        </p>
+                    </div>
+                </div>
+                
+                <p class="text-xs text-slate-400 mt-4 flex items-center gap-x-1">
+                    <span class="inline-block w-2 h-2 bg-amber-400 rounded-full"></span>
+                    Upload the image → system automatically finds the matching entry in the JSONL by filename (basename).
+                </p>
+            </div>
+
+            <!-- Viewer -->
+            <div id="viewer-section" class="hidden">
+                <div class="flex justify-between items-baseline mb-6">
+                    <div class="flex items-center gap-x-4">
+                        <h2 class="text-3xl font-semibold" id="current-filename-display"></h2>
+                        <div class="flex items-center text-xs px-3 h-7 bg-white rounded-3xl border border-slate-200">
+                            <span id="meta-source" class="font-medium text-slate-500"></span>
+                        </div>
+                        <div onclick="copyMetadata(this)" class="cursor-pointer flex items-center text-xs px-3 h-7 bg-white rounded-3xl border border-slate-200 hover:bg-blue-50 hover:border-blue-200">
+                            📋 Copy full JSON
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-center text-sm text-slate-400 font-medium">
+                        Hover any <span class="mx-1 text-blue-500">blue box</span> → text below lights up
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-1 xl:grid-cols-12 gap-8">
+                    <!-- Image + Overlays -->
+                    <div class="xl:col-span-8">
+                        <div class="flex justify-center bg-white rounded-3xl border border-slate-200 p-8 shadow-sm">
+                            <div id="image-wrapper">
+                                <img id="main-image" 
+                                     class="max-h-[700px] w-auto rounded-3xl block"
+                                     alt="Annotated image">
+                                <div id="overlays"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="flex justify-center text-xs text-slate-400 mt-4 gap-x-8">
+                            <div class="flex items-center gap-x-1">
+                                <div class="w-3 h-3 border-2 border-blue-500 rounded"></div>
+                                handwritten
+                            </div>
+                            <div class="flex items-center gap-x-1">
+                                <div class="w-3 h-3 border-2 border-emerald-500 rounded"></div>
+                                formula
+                            </div>
+                            <div class="flex items-center gap-x-1">
+                                <div class="w-3 h-3 border-2 border-amber-500 rounded"></div>
+                                printed
+                            </div>
+                            <div class="flex items-center gap-x-1">
+                                <div class="w-3 h-3 border-2 border-purple-500 rounded"></div>
+                                annotation
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Texts panel -->
+                    <div class="xl:col-span-4 bg-white rounded-3xl shadow-sm border border-slate-200 p-6 flex flex-col">
+                        <div class="flex items-center justify-between mb-4 px-2">
+                            <h3 class="font-semibold text-lg">All regions • <span id="region-count-badge" class="font-mono text-blue-600"></span></h3>
+                            <button onclick="toggleAllRegions()" 
+                                    class="text-xs flex items-center px-3 py-1 bg-slate-100 hover:bg-slate-200 rounded-2xl text-slate-500">
+                                <span id="toggle-text">Expand all</span>
+                            </button>
+                        </div>
+                        
+                        <div id="annotation-list" class="flex-1 overflow-auto pr-2 space-y-4 custom-scroll">
+                            <!-- Populated by JS -->
+                        </div>
+                        
+                        <div class="mt-6 pt-6 border-t text-[10px] text-slate-400 font-mono flex items-center justify-between">
+                            <div>Click region on image → zoom preview</div>
+                            <div class="text-right">Hover text → region pulses</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="zoom-modal" class="hidden fixed inset-0 z-[100] bg-slate-950/70 backdrop-blur-sm p-4">
+        <div class="h-full flex items-stretch justify-center">
+            <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full h-full overflow-hidden flex flex-col">
+                <div class="flex items-center justify-between px-5 py-4 border-b border-slate-200">
+                    <div>
+                        <div id="zoom-title" class="font-semibold text-slate-900">Region preview</div>
+                        <div id="zoom-subtitle" class="text-xs text-slate-500 font-mono mt-1"></div>
+                    </div>
+                    <div class="flex items-center gap-x-2">
+                        <button onclick="showAdjacentRegion(-1)" class="px-3 h-9 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-700">
+                            ← Previous
+                        </button>
+                        <button onclick="showAdjacentRegion(1)" class="px-3 h-9 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-700">
+                            Next →
+                        </button>
+                        <button onclick="closeZoomModal()" class="px-3 h-9 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-700">
+                            Close
+                        </button>
+                    </div>
+                </div>
+                <div class="bg-slate-100 p-5 flex-1 min-h-0 overflow-auto">
+                    <div class="flex items-center justify-center min-h-[240px]">
+                        <canvas id="zoom-canvas" class="rounded-lg bg-white shadow-sm"></canvas>
+                    </div>
+                    <div class="bg-white rounded-xl border border-slate-200 p-4 mt-5">
+                        <div class="text-xs uppercase tracking-widest text-slate-400 font-semibold mb-2">Metadata text</div>
+                        <pre id="zoom-text" class="text-base leading-relaxed text-slate-700 whitespace-pre-wrap break-words max-h-[24vh] overflow-auto"></pre>
+                        <div id="zoom-meta" class="mt-4 pt-3 border-t border-slate-100 text-xs font-mono text-slate-400"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * Region Viewer with automatic filename inference
+         * Upload image → automatically matches entry by basename in JSONL
+         * Fully self-contained • Works offline
+         */
+        
+        // Tailwind CDN initialization
+        function initializeTailwind() {
+            return {
+                config(userConfig = {}) {
+                    return {
+                        configUser: userConfig,
+                        theme: {
+                            extend: {
+                                fontFamily: {
+                                    sans: ['Inter', 'system_ui', 'sans-serif'],
+                                }
+                            }
+                        },
+                        plugins: [],
+                    }
+                },
+                theme: {
+                    extend: {},
+                },
+            }
+        }
+        
+        // Global state
+        let dataset = []
+        let currentEntry = null
+        let currentImageUrl = null
+        let currentZoomIndex = 0
+        let scale = 1
+        let typeColors = {
+            "handwritten": "#3b82f6",
+            "formula": "#10b981",
+            "printed": "#f59e0b",
+            "annotation": "#8b5cf6"
+        }
+        
+        // Utility: debounce
+        function debounce(fn, ms = 80) {
+            let timeout
+            return function(...args) {
+                clearTimeout(timeout)
+                timeout = setTimeout(() => fn.apply(this, args), ms)
+            }
+        }
+
+        function parseJsonMaybe(value) {
+            if (typeof value !== 'string') return value
+            try {
+                return JSON.parse(value)
+            } catch {
+                return value
+            }
+        }
+
+        function toNumber(value) {
+            const number = Number(value)
+            return Number.isFinite(number) ? number : null
+        }
+
+        function bboxFromPoints(points) {
+            const flatPoints = points
+                .map(point => Array.isArray(point) ? point : [point?.x, point?.y])
+                .map(([x, y]) => [toNumber(x), toNumber(y)])
+                .filter(([x, y]) => x !== null && y !== null)
+
+            if (flatPoints.length === 0) return null
+
+            const xs = flatPoints.map(([x]) => x)
+            const ys = flatPoints.map(([, y]) => y)
+            return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)]
+        }
+
+        function normalizeBbox(value) {
+            const bbox = parseJsonMaybe(value)
+            if (!bbox) return null
+
+            if (Array.isArray(bbox)) {
+                if (bbox.length >= 4 && bbox.slice(0, 4).every(item => toNumber(item) !== null)) {
+                    return bbox.slice(0, 4).map(Number)
+                }
+                if (bbox.every(point => Array.isArray(point) || typeof point === 'object')) {
+                    return bboxFromPoints(bbox)
+                }
+            }
+
+            if (typeof bbox !== 'object') return null
+
+            const x1 = toNumber(bbox.x1 ?? bbox.left ?? bbox.l)
+            const y1 = toNumber(bbox.y1 ?? bbox.top ?? bbox.t)
+            const x2 = toNumber(bbox.x2 ?? bbox.right ?? bbox.r)
+            const y2 = toNumber(bbox.y2 ?? bbox.bottom ?? bbox.b)
+            if ([x1, y1, x2, y2].every(value => value !== null)) return [x1, y1, x2, y2]
+
+            const x = toNumber(bbox.x ?? bbox.left)
+            const y = toNumber(bbox.y ?? bbox.top)
+            const width = toNumber(bbox.width ?? bbox.w)
+            const height = toNumber(bbox.height ?? bbox.h)
+            if ([x, y, width, height].every(value => value !== null)) return [x, y, x + width, y + height]
+
+            return null
+        }
+
+        function bboxValueFrom(region) {
+            const value = parseJsonMaybe(region?.value)
+            return (
+                region?.bbox ??
+                region?.bounding_box ??
+                region?.box ??
+                region?.bounds ??
+                region?.rect ??
+                region?.rectangle ??
+                region?.coordinates ??
+                region?.points ??
+                region?.polygon ??
+                value?.bbox ??
+                value?.bounding_box ??
+                value?.box ??
+                value?.bounds ??
+                value?.rect ??
+                value?.rectangle ??
+                value?.coordinates ??
+                value?.points ??
+                value?.polygon ??
+                value
+            )
+        }
+
+        function firstValue(...values) {
+            for (const value of values) {
+                if (Array.isArray(value) && value.length > 0) return value[0]
+                if (value !== undefined && value !== null && value !== '') return value
+            }
+            return ''
+        }
+
+        function textValue(...values) {
+            const value = firstValue(...values)
+            return Array.isArray(value) ? value.join('\n') : String(value || '')
+        }
+
+        function normalizeTextValue(value) {
+            const parsed = parseJsonMaybe(value)
+            if (parsed === undefined || parsed === null || parsed === '') return ''
+            if (Array.isArray(parsed)) {
+                return parsed.map(normalizeTextValue).filter(Boolean).join('\n')
+            }
+            if (typeof parsed === 'object') {
+                const textKeys = ['full_text', 'text', 'transcription', 'transcript', 'content', 'ocr_text', 'recognized_text', 'label_text', 'textarea', 'value']
+                for (const key of textKeys) {
+                    const text = normalizeTextValue(parsed[key])
+                    if (text) return text
+                }
+                return ''
+            }
+            return String(parsed).replace(/\\n/g, '\n')
+        }
+
+        function getRegionFullText(region) {
+            const value = parseJsonMaybe(region?.value)
+            const candidates = [
+                region?.full_text,
+                region?.text,
+                region?.transcription,
+                region?.transcript,
+                region?.content,
+                region?.ocr_text,
+                region?.recognized_text,
+                region?.label_text,
+                value?.full_text,
+                value?.text,
+                value?.transcription,
+                value?.transcript,
+                value?.content,
+                value?.ocr_text,
+                value?.recognized_text,
+                value?.label_text,
+                value?.textarea
+            ]
+
+            for (const candidate of candidates) {
+                const text = normalizeTextValue(candidate)
+                if (text) return text
+            }
+
+            return ''
+        }
+
+        function isPercentBox(region, bbox) {
+            const value = parseJsonMaybe(region?.value)
+            const hasLabelStudioShape = value && ['x', 'y', 'width', 'height'].every(key => value[key] !== undefined)
+            const hasPercentHint =
+                region?.original_width !== undefined ||
+                region?.original_height !== undefined ||
+                value?.rotation !== undefined ||
+                region?.from_name !== undefined ||
+                region?.to_name !== undefined
+
+            return Boolean(
+                hasLabelStudioShape &&
+                hasPercentHint &&
+                bbox.every(coord => coord >= 0 && coord <= 100)
+            )
+        }
+
+        function normalizeRegion(region) {
+            if (!region || typeof region !== 'object') return null
+
+            const value = parseJsonMaybe(region.value)
+            const bbox = normalizeBbox(bboxValueFrom(region))
+            if (!bbox) return null
+
+            return {
+                ...region,
+                bbox,
+                bboxUnit: isPercentBox(region, bbox) ? 'percent' : 'pixels',
+                type: firstValue(
+                    region.type,
+                    region.label,
+                    region.category,
+                    region.class,
+                    region.kind,
+                    value?.rectanglelabels,
+                    value?.labels,
+                    value?.choices,
+                    'region'
+                ),
+                text: getRegionFullText(region),
+                language: firstValue(region.language, region.lang, value?.language, '—'),
+                legibility: firstValue(region.legibility, region.readability, region.confidence, value?.score, '—')
+            }
+        }
+
+        function isRegionLike(value) {
+            const parsed = parseJsonMaybe(value)
+            return Boolean(parsed && typeof parsed === 'object' && !Array.isArray(parsed) && normalizeBbox(bboxValueFrom(parsed)))
+        }
+
+        function findRegionArray(value, depth = 0) {
+            const parsed = parseJsonMaybe(value)
+            if (!parsed || depth > 10) return null
+
+            if (Array.isArray(parsed)) {
+                const regions = []
+                parsed.forEach(item => {
+                    if (isRegionLike(item)) {
+                        regions.push(item)
+                        return
+                    }
+
+                    const nested = findRegionArray(item, depth + 1)
+                    if (nested) regions.push(...nested)
+                })
+
+                return regions.length > 0 ? regions : null
+            }
+
+            if (typeof parsed !== 'object') return null
+
+            if (isRegionLike(parsed)) return [parsed]
+
+            const regionKeys = [
+                'regions',
+                'annotations',
+                'annotation',
+                'boxes',
+                'bboxes',
+                'bounding_boxes',
+                'detections',
+                'predictions',
+                'results',
+                'segments',
+                'blocks',
+                'layout',
+                'objects',
+                'shapes'
+            ]
+
+            for (const key of regionKeys) {
+                const candidate = findRegionArray(parsed[key], depth + 1)
+                if (candidate) return candidate
+            }
+
+            for (const key of Object.keys(parsed)) {
+                if (regionKeys.includes(key)) continue
+                const candidate = findRegionArray(parsed[key], depth + 1)
+                if (candidate) return candidate
+            }
+
+            return null
+        }
+
+        // Some JSONL exports use different annotation field names. Normalize them.
+        function getRegions(entry) {
+            const direct = findRegionArray(entry)
+            const nested = direct ||
+                findRegionArray(entry?.metadata) ||
+                findRegionArray(entry?.output) ||
+                findRegionArray(entry?.result) ||
+                findRegionArray(entry?.ground_truth) ||
+                findRegionArray(entry?.prediction)
+
+            const source = nested || (normalizeBbox(entry?.bbox) ? [entry] : [])
+            return source.map(normalizeRegion).filter(Boolean)
+        }
+
+        function logEntryRegionSummary(entry, context) {
+            const regions = getRegions(entry)
+            if (regions.length > 0) {
+                console.log(`✅ ${context}: found ${regions.length} drawable regions`)
+            } else {
+                console.warn(`⚠️ ${context}: found 0 drawable regions`, {
+                    topLevelKeys: Object.keys(entry || {}),
+                    entry
+                })
+            }
+            return regions
+        }
+
+        function getDisplayFilename(entry) {
+            return (entry?.file_name || 'Unknown file').split(/[/\\]/).pop()
+        }
+
+        function getImageWidth(entry, img = null) {
+            return toNumber(entry?.image_width ?? entry?.width ?? entry?.metadata?.width) || img?.naturalWidth || img?.clientWidth || 1
+        }
+
+        function getImageHeight(entry, img = null) {
+            return toNumber(entry?.image_height ?? entry?.height ?? entry?.metadata?.height) || img?.naturalHeight || img?.clientHeight || 1
+        }
+
+        function getDimensionLabel(entry, img = null) {
+            return `${getImageWidth(entry, img)}×${getImageHeight(entry, img)}`
+        }
+
+        function getPixelBbox(region, img) {
+            const bbox = region.bbox
+            if (!Array.isArray(bbox) || bbox.length < 4) return null
+
+            const imageWidth = getImageWidth(currentEntry, img)
+            const imageHeight = getImageHeight(currentEntry, img)
+            const [x1, y1, x2, y2] = bbox
+
+            if (region.bboxUnit === 'percent') {
+                return [
+                    x1 * imageWidth / 100,
+                    y1 * imageHeight / 100,
+                    x2 * imageWidth / 100,
+                    y2 * imageHeight / 100
+                ]
+            }
+
+            return [x1, y1, x2, y2]
+        }
+
+        function clampBboxToImage(bbox, img) {
+            const imageWidth = img.naturalWidth || getImageWidth(currentEntry, img)
+            const imageHeight = img.naturalHeight || getImageHeight(currentEntry, img)
+            const [x1, y1, x2, y2] = bbox
+            const left = Math.max(0, Math.min(x1, x2))
+            const top = Math.max(0, Math.min(y1, y2))
+            const right = Math.min(imageWidth, Math.max(x1, x2))
+            const bottom = Math.min(imageHeight, Math.max(y1, y2))
+
+            if (right <= left || bottom <= top) return null
+            return [left, top, right, bottom]
+        }
+
+        function openRegionZoom(region, index) {
+            const img = document.getElementById('main-image')
+            const modal = document.getElementById('zoom-modal')
+            const canvas = document.getElementById('zoom-canvas')
+            const title = document.getElementById('zoom-title')
+            const subtitle = document.getElementById('zoom-subtitle')
+            const zoomText = document.getElementById('zoom-text')
+            const zoomMeta = document.getElementById('zoom-meta')
+            const pixelBbox = getPixelBbox(region, img)
+            if (!img || !canvas || !pixelBbox) return
+            currentZoomIndex = index
+
+            const clampedBbox = clampBboxToImage(pixelBbox, img)
+            if (!clampedBbox) return
+
+            const [x1, y1, x2, y2] = clampedBbox
+            const width = Math.max(1, Math.round(x2 - x1))
+            const height = Math.max(1, Math.round(y2 - y1))
+            const maxCanvasWidth = Math.max(320, window.innerWidth - 96)
+            const maxCanvasHeight = Math.floor(window.innerHeight * 0.62)
+            const zoom = Math.max(1, Math.min(maxCanvasWidth / width, maxCanvasHeight / height, 4))
+            const canvasWidth = Math.round(width * zoom)
+            const canvasHeight = Math.round(height * zoom)
+
+            canvas.width = canvasWidth
+            canvas.height = canvasHeight
+            canvas.style.width = `${canvasWidth}px`
+            canvas.style.height = `${canvasHeight}px`
+
+            const ctx = canvas.getContext('2d')
+            ctx.imageSmoothingEnabled = true
+            ctx.imageSmoothingQuality = 'high'
+            ctx.clearRect(0, 0, canvas.width, canvas.height)
+            ctx.drawImage(img, x1, y1, width, height, 0, 0, canvas.width, canvas.height)
+
+            title.textContent = `Region ${index + 1} • ${region.type || 'region'}`
+            subtitle.textContent = `${Math.round(x1)}, ${Math.round(y1)} → ${Math.round(x2)}, ${Math.round(y2)} • ${width}×${height}px`
+            zoomText.textContent = region.text || 'No text metadata for this region.'
+            zoomMeta.textContent = `${region.language || '—'} • ${region.legibility || '—'}`
+            modal.classList.remove('hidden')
+            document.body.classList.add('overflow-hidden')
+        }
+
+        function showAdjacentRegion(direction) {
+            const regions = getRegions(currentEntry)
+            if (regions.length === 0) return
+
+            const nextIndex = (currentZoomIndex + direction + regions.length) % regions.length
+            openRegionZoom(regions[nextIndex], nextIndex)
+        }
+
+        function closeZoomModal() {
+            document.getElementById('zoom-modal').classList.add('hidden')
+            document.body.classList.remove('overflow-hidden')
+        }
+        
+        // NEW: Infer entry by uploaded image filename (basename match)
+        function findEntryByFilename(uploadedFilename) {
+            if (!dataset || dataset.length === 0) return null
+            const uploadedBase = uploadedFilename.toLowerCase().split(/[/\\]/).pop()
+            for (let i = 0; i < dataset.length; i++) {
+                if (!dataset[i]?.file_name) continue
+                const entryBase = dataset[i].file_name.toLowerCase().split(/[/\\]/).pop()
+                if (entryBase === uploadedBase) {
+                    return { index: i, entry: dataset[i] }
+                }
+            }
+            return null
+        }
+        
+        // Render overlays on the image
+        function renderOverlays() {
+            const img = document.getElementById('main-image')
+            const overlays = document.getElementById('overlays')
+            if (!img || !currentEntry || !img.complete) return 0
+            
+            scale = img.clientWidth / getImageWidth(currentEntry, img)
+            
+            overlays.innerHTML = ''
+            let renderedCount = 0
+            
+            getRegions(currentEntry).forEach((region, index) => {
+                const pixelBbox = getPixelBbox(region, img)
+                if (!pixelBbox) return
+                const [x1, y1, x2, y2] = pixelBbox
+                const left = x1 * scale
+                const top = y1 * scale
+                const width = (x2 - x1) * scale
+                const height = (y2 - y1) * scale
+                if (width <= 0 || height <= 0) return
+                
+                const color = typeColors[region.type] || '#ef4444'
+                const regionText = region.text || ''
+                
+                const box = document.createElement('div')
+                box.className = 'region-box'
+                box.style.left = `${left}px`
+                box.style.top = `${top}px`
+                box.style.width = `${width}px`
+                box.style.height = `${height}px`
+                box.style.borderColor = color
+                box.style.backgroundColor = `${color}22`
+                box.dataset.index = index
+                box.title = `${region.type || 'region'} • ${regionText.substring(0, 60)}…`
+                
+                box.addEventListener('mouseenter', () => {
+                    highlightText(index, true, false)
+                    box.style.borderWidth = '5px'
+                    box.style.backgroundColor = `${color}33`
+                })
+                
+                box.addEventListener('mouseleave', () => {
+                    highlightText(index, false, false)
+                    box.style.borderWidth = '3px'
+                    box.style.backgroundColor = `${color}22`
+                })
+                
+                box.addEventListener('click', (e) => {
+                    e.stopImmediatePropagation()
+                    openRegionZoom(region, index)
+                })
+                
+                overlays.appendChild(box)
+                renderedCount += 1
+            })
+
+            return renderedCount
+        }
+        
+        // Highlight text item in the list
+        function highlightText(index, active, shouldScroll = true) {
+            const items = document.querySelectorAll('.annotation-item')
+            if (!items[index]) return
+            if (active) {
+                items[index].classList.add('highlighted')
+                if (shouldScroll) {
+                    items[index].scrollIntoView({ behavior: 'smooth', block: 'center' })
+                }
+            } else {
+                items[index].classList.remove('highlighted')
+            }
+        }
+        
+        // Highlight box when hovering text
+        function highlightBox(index, active) {
+            const boxes = document.querySelectorAll('.region-box')
+            const targetBox = Array.from(boxes).find(b => parseInt(b.dataset.index) === index)
+            if (!targetBox) return
+            
+            const color = targetBox.style.borderColor || '#3b82f6'
+            
+            if (active) {
+                targetBox.style.borderWidth = '6px'
+                targetBox.style.backgroundColor = `${color}44`
+                targetBox.style.transform = 'scale(1.04)'
+            } else {
+                targetBox.style.borderWidth = '3px'
+                targetBox.style.backgroundColor = `${color}22`
+                targetBox.style.transform = 'scale(1)'
+            }
+        }
+        
+        // Render the bottom annotation list
+        function renderAnnotationList() {
+            const container = document.getElementById('annotation-list')
+            container.innerHTML = ''
+            
+            if (!currentEntry) return
+
+            const regions = getRegions(currentEntry)
+            
+            document.getElementById('region-count-badge').innerHTML = `
+                ${regions.length} <span class="text-slate-300">regions</span>
+            `
+            
+            regions.forEach((region, index) => {
+                const color = typeColors[region.type] || '#ef4444'
+                
+                const div = document.createElement('div')
+                div.className = `annotation-item rounded-3xl p-5 bg-white shadow-sm border border-slate-100`
+                div.style.borderLeftColor = color
+                div.dataset.index = index
+                
+                const escapedText = (region.text || '')
+                    .replace(/\\n/g, '\n')
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                
+                div.innerHTML = `
+                    <div class="flex items-start justify-between">
+                        <div class="flex items-center gap-x-2">
+                            <span class="text-xs uppercase font-medium px-2.5 py-px rounded-3xl" 
+                                  style="background: ${color}22; color: ${color}">
+                                ${region.type || 'region'}
+                            </span>
+                            <span class="text-xs font-mono text-slate-400">${region.language || '—'} • ${region.legibility || '—'}</span>
+                        </div>
+                        <span class="text-xs bg-slate-100 px-2 py-px rounded-xl">${index + 1}</span>
+                    </div>
+                    <div class="text-container mt-3">
+                        <pre class="text-sm leading-relaxed text-slate-700">${escapedText}</pre>
+                    </div>
+                `
+                
+                div.addEventListener('mouseenter', () => highlightBox(index, true))
+                div.addEventListener('mouseleave', () => highlightBox(index, false))
+                
+                container.appendChild(div)
+            })
+            
+            if (regions.length === 0) {
+                container.innerHTML = `<div class="text-center py-12 text-slate-400">No regions in this entry.</div>`
+            } else {
+                setRegionsCollapsed(true)
+            }
+        }
+        
+        // Main render after image loads
+        function onImageReady() {
+            const renderedBoxCount = renderOverlays()
+            renderAnnotationList()
+            document.getElementById('viewer-section').classList.remove('hidden')
+            document.getElementById('image-name-badge').classList.remove('hidden')
+
+            if (renderedBoxCount === 0) {
+                alert(`No regions were rendered on the image for "${getDisplayFilename(currentEntry)}".\n\nThe matched JSON entry may not contain drawable bounding boxes, or its box format is not supported yet.`)
+            }
+        }
+        
+        // Populate file selector
+        function populateFileSelector() {
+            const select = document.getElementById('file-select')
+            select.innerHTML = `<option value="">— Choose manually (or just upload image) —</option>`
+            
+            dataset.forEach((entry, i) => {
+                const option = document.createElement('option')
+                option.value = i
+                option.textContent = getDisplayFilename(entry)
+                select.appendChild(option)
+            })
+            
+            document.getElementById('selector-panel').classList.remove('hidden')
+        }
+        
+        // Load JSONL
+        function loadJSONL(file) {
+            const reader = new FileReader()
+            reader.onload = function(e) {
+                try {
+                    const text = e.target.result
+                    const lines = text.trim().split('\n').filter(line => line.trim().length > 0)
+                    
+                    dataset = lines.map((line, idx) => {
+                        try {
+                            return JSON.parse(line)
+                        } catch (err) {
+                            console.warn(`Failed to parse line ${idx + 1}`, err)
+                            return null
+                        }
+                    }).filter(Boolean)
+                    
+                    const totalRegions = dataset.reduce((total, entry) => total + getRegions(entry).length, 0)
+                    console.log(`✅ Loaded ${dataset.length} entries with filename inference enabled (${totalRegions} drawable regions detected)`)
+                    
+                    const statusEl = document.getElementById('json-status')
+                    statusEl.classList.remove('hidden')
+                    document.getElementById('file-count').innerHTML = `
+                        <span class="px-2.5 py-px bg-emerald-200 text-emerald-800 rounded-2xl font-semibold">${dataset.length}</span>
+                    `
+                    document.getElementById('upload-step').classList.add('opacity-75')
+                    
+                    populateFileSelector()
+                    
+                } catch (err) {
+                    alert('❌ Could not parse JSONL file.\n\nMake sure it is line-delimited JSON (one object per line).')
+                    console.error(err)
+                }
+            }
+            reader.readAsText(file)
+        }
+        
+        // Clear everything
+        function clearDataset() {
+            dataset = []
+            currentEntry = null
+            document.getElementById('json-status').classList.add('hidden')
+            document.getElementById('upload-step').classList.remove('opacity-75')
+            document.getElementById('selector-panel').classList.add('hidden')
+            document.getElementById('viewer-section').classList.add('hidden')
+            document.getElementById('file-select').innerHTML = ''
+            console.log('Dataset cleared')
+        }
+        
+        // Copy current metadata as JSON
+        function copyMetadata(btn) {
+            if (!currentEntry) return
+            navigator.clipboard.writeText(JSON.stringify(currentEntry, null, 2)).then(() => {
+                const orig = btn.textContent
+                btn.textContent = '✅ Copied!'
+                setTimeout(() => { btn.textContent = orig }, 1500)
+            }).catch((err) => {
+                console.error('Could not copy metadata', err)
+                alert('Could not copy metadata to clipboard.')
+            })
+        }
+        
+        // Toggle collapse / expand of list
+        function setRegionsCollapsed(collapsed) {
+            const txt = document.getElementById('toggle-text')
+            txt.textContent = collapsed ? 'Expand all' : 'Collapse all'
+            document.querySelectorAll('.annotation-item pre').forEach(pre => {
+                pre.style.maxHeight = collapsed ? '3.2rem' : ''
+                pre.style.overflow = collapsed ? 'hidden' : ''
+            })
+        }
+
+        function toggleAllRegions() {
+            const txt = document.getElementById('toggle-text')
+            setRegionsCollapsed(txt.textContent === 'Collapse all')
+        }
+        
+        // Main app bootstrap
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeTailwind()
+
+            const zoomModal = document.getElementById('zoom-modal')
+            zoomModal.addEventListener('click', (e) => {
+                if (e.target === zoomModal) closeZoomModal()
+            })
+
+            document.addEventListener('keydown', (e) => {
+                if (zoomModal.classList.contains('hidden')) return
+
+                if (e.key === 'Escape') {
+                    closeZoomModal()
+                } else if (e.key === 'ArrowRight') {
+                    e.preventDefault()
+                    showAdjacentRegion(1)
+                } else if (e.key === 'ArrowLeft') {
+                    e.preventDefault()
+                    showAdjacentRegion(-1)
+                }
+            })
+            
+            // JSONL upload
+            const jsonInput = document.getElementById('jsonl-input')
+            jsonInput.addEventListener('change', (e) => {
+                if (e.target.files && e.target.files[0]) {
+                    loadJSONL(e.target.files[0])
+                }
+            })
+            
+            // File selector change (manual selection)
+            const fileSelect = document.getElementById('file-select')
+            fileSelect.addEventListener('change', () => {
+                const index = parseInt(fileSelect.value)
+                if (isNaN(index)) return
+                
+                currentEntry = dataset[index]
+                
+                // Reset image area
+                const img = document.getElementById('main-image')
+                img.src = ''
+                document.getElementById('overlays').innerHTML = ''
+                document.getElementById('annotation-list').innerHTML = ''
+                document.getElementById('viewer-section').classList.add('hidden')
+                document.getElementById('image-name-badge').classList.add('hidden')
+                document.getElementById('inference-status').classList.add('hidden')
+                
+                // Display filename and metadata
+                document.getElementById('current-filename-display').innerHTML = `
+                    ${getDisplayFilename(currentEntry)}
+                    <span class="text-xs ml-3 font-mono bg-slate-100 px-2 py-px rounded-2xl text-slate-400">${getDimensionLabel(currentEntry)}</span>
+                `
+                document.getElementById('meta-source').innerHTML = `
+                    ${currentEntry.source || '—'} • ${currentEntry.annotation_source || 'auto'}
+                `
+                document.getElementById('expected-name').textContent = getDisplayFilename(currentEntry)
+            })
+            
+            // Image file upload with AUTOMATIC FILENAME INFERENCE
+            const imageInput = document.getElementById('image-input')
+            imageInput.addEventListener('change', (e) => {
+                if (!e.target.files || !e.target.files[0]) return
+                
+                const file = e.target.files[0]
+                
+                // Try to infer entry from filename
+                const match = findEntryByFilename(file.name)
+                
+                if (match) {
+                    currentEntry = match.entry
+                    
+                    // Auto-select in dropdown
+                    document.getElementById('file-select').value = match.index
+                    
+                    // Update header
+                    document.getElementById('current-filename-display').innerHTML = `
+                        ${getDisplayFilename(currentEntry)}
+                        <span class="text-xs ml-3 font-mono bg-slate-100 px-2 py-px rounded-2xl text-slate-400">${getDimensionLabel(currentEntry)}</span>
+                    `
+                    document.getElementById('meta-source').innerHTML = `
+                        ${currentEntry.source || '—'} • ${currentEntry.annotation_source || 'auto'}
+                    `
+                    document.getElementById('expected-name').textContent = getDisplayFilename(currentEntry)
+                    
+                    // Show inference badge
+                    document.getElementById('inference-status').classList.remove('hidden')
+                    setTimeout(() => {
+                        document.getElementById('inference-status').classList.add('hidden')
+                    }, 4000)
+                    
+                    console.log(`✅ Auto-inferred entry from uploaded filename: ${file.name}`)
+                    logEntryRegionSummary(currentEntry, `Matched ${file.name}`)
+                } else if (!currentEntry) {
+                    // No match and no manual selection yet
+                    alert(`⚠️ No matching entry found in the dataset for filename:\n\n${file.name}\n\nPlease select an entry manually from the dropdown first.`)
+                    return
+                }
+                // If we reach here: either inferred successfully OR user had already selected manually
+                
+                currentImageUrl = URL.createObjectURL(file)
+                
+                const img = document.getElementById('main-image')
+                img.src = currentImageUrl
+                
+                img.onload = () => {
+                    // Light dimension warning
+                    if (currentEntry && 
+                        (Math.abs(img.naturalWidth - getImageWidth(currentEntry, img)) > 30 ||
+                         Math.abs(img.naturalHeight - getImageHeight(currentEntry, img)) > 30)) {
+                        console.warn('⚠️ Image dimensions differ slightly from metadata. Scaling still applied.')
+                    }
+                    onImageReady()
+                }
+                
+                img.onerror = () => {
+                    alert('Could not load the selected image.')
+                }
+            })
+            
+            console.log('%c✅ Region Viewer ready with filename inference! Upload JSONL then any image — it will auto-match.', 'color:#10b981; font-family:monospace')
+        })
+    </script>
+</body>
+</html>
