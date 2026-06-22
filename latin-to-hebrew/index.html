@@ -171,7 +171,7 @@
             <strong class="font-semibold">Note:</strong>
             This uses a 5,000-entry override dictionary plus fallback rules in both directions. Transliteration is ambiguous: unvocalized Hebrew usually omits vowels, and Latin spellings like
             <span class="font-semibold">kh</span>, <span class="font-semibold">t</span>, and
-            <span class="font-semibold">v</span> can map to more than one Hebrew spelling. Hebrew vowel marks are used when present.
+            <span class="font-semibold">v</span> can map to more than one Hebrew spelling. Hebrew vowel points and pronunciation marks are used when present.
           </div>
 
           <div class="mt-5 grid grid-cols-2 gap-2 text-sm text-slate-300 sm:grid-cols-3">
@@ -182,6 +182,7 @@
             <button class="sample rounded-xl bg-white/10 px-3 py-2 text-left hover:bg-white/15" data-latin="khaverim" data-hebrew="חברים">khaverim</button>
             <button class="sample rounded-xl bg-white/10 px-3 py-2 text-left hover:bg-white/15" data-latin="ani ohev ivrit" data-hebrew="אני אוהב עברית">ani ohev ivrit</button>
             <button class="sample rounded-xl bg-white/10 px-3 py-2 text-left hover:bg-white/15" data-latin="neqdimon" data-hebrew="נְקְדִּימוֹן">neqdimon</button>
+            <button class="sample rounded-xl bg-white/10 px-3 py-2 text-left hover:bg-white/15" data-latin="ruakh" data-hebrew="רוּחַ">ruakh</button>
           </div>
         </aside>
       </div>
@@ -1408,7 +1409,18 @@ eretz yisrael=ארץ ישראל`;
       const SHIN_DOT = "\u05C1";
       const SIN_DOT = "\u05C2";
       const SHEVA = "\u05B0";
+      const HATAF_SEGOL = "\u05B1";
+      const HATAF_PATAH = "\u05B2";
+      const HATAF_QAMATS = "\u05B3";
       const HIRIQ = "\u05B4";
+      const TSERE = "\u05B5";
+      const SEGOL = "\u05B6";
+      const PATAH = "\u05B7";
+      const QAMATS = "\u05B8";
+      const HOLAM = "\u05B9";
+      const HOLAM_HASER = "\u05BA";
+      const QUBUTS = "\u05BB";
+      const QAMATS_QATAN = "\u05C7";
 
       function splitClusters(word) {
         const chars = Array.from(word.normalize("NFD"));
@@ -1436,13 +1448,22 @@ eretz yisrael=ארץ ישראל`;
         return cluster.includes(mark);
       }
 
-      function vowelFor(cluster, index = 0) {
-        if (cluster.includes(SHEVA)) return index === 0 ? "e" : "";
-        if (cluster.includes("\u05B7") || cluster.includes("\u05B8") || cluster.includes("\u05B2")) return "a";
-        if (cluster.includes("\u05B6") || cluster.includes("\u05B5") || cluster.includes("\u05B1")) return "e";
+      function isVocalSheva(index, clusters) {
+        const cluster = clusters[index] || "";
+        if (!cluster.includes(SHEVA)) return false;
+        return index === 0;
+      }
+
+      function vowelFor(cluster, index = 0, clusters = [cluster]) {
+        if (cluster.includes(HATAF_PATAH)) return "a";
+        if (cluster.includes(HATAF_SEGOL)) return "e";
+        if (cluster.includes(HATAF_QAMATS)) return "o";
+        if (cluster.includes(SHEVA)) return isVocalSheva(index, clusters) ? "e" : "";
+        if (cluster.includes(PATAH) || cluster.includes(QAMATS)) return "a";
+        if (cluster.includes(SEGOL) || cluster.includes(TSERE)) return "e";
         if (cluster.includes(HIRIQ)) return "i";
-        if (cluster.includes("\u05B9") || cluster.includes("\u05BA") || cluster.includes("\u05B3")) return "o";
-        if (cluster.includes("\u05BB")) return "u";
+        if (cluster.includes(HOLAM) || cluster.includes(HOLAM_HASER) || cluster.includes(QAMATS_QATAN)) return "o";
+        if (cluster.includes(QUBUTS)) return "u";
         return "";
       }
 
@@ -1450,14 +1471,10 @@ eretz yisrael=ארץ ישראל`;
         return /[\u05B0-\u05BB\u05C7]/u.test(cluster);
       }
 
-      function mapPlainCluster(cluster, index = 0) {
+      function consonantFor(cluster) {
         const base = baseOf(cluster);
         const hasDagesh = hasMark(cluster, DAGESH);
         const hasSinDot = hasMark(cluster, SIN_DOT);
-        const vowel = vowelFor(cluster, index);
-
-        if (base === "ו" && (hasDagesh || vowel === "u")) return "u";
-        if (base === "ו" && vowel === "o") return "o";
 
         const consonants = {
           "א": settings.showAyinAlef ? "'" : "",
@@ -1489,8 +1506,24 @@ eretz yisrael=ארץ ישראל`;
           "ת": "t"
         };
 
-        const consonant = consonants[base] ?? base;
-        return consonant + vowel;
+        return consonants[base] ?? base;
+      }
+
+      function mapPlainCluster(cluster, index = 0, clusters = [cluster]) {
+        const base = baseOf(cluster);
+        const hasDagesh = hasMark(cluster, DAGESH);
+        const vowel = vowelFor(cluster, index, clusters);
+
+        if (base === "ו" && (hasDagesh || vowel === "u")) return "u";
+        if (base === "ו" && vowel === "o") return "o";
+
+        return consonantFor(cluster) + vowel;
+      }
+
+      function hasFurtivePatah(index, clusters) {
+        const cluster = clusters[index] || "";
+        const base = baseOf(cluster);
+        return index === clusters.length - 1 && cluster.includes(PATAH) && /[חעה]/u.test(base);
       }
 
       function mapGeresh(base) {
@@ -1534,7 +1567,12 @@ eretz yisrael=ארץ ישראל`;
             continue;
           }
 
-          out += mapPlainCluster(cluster, i);
+          if (hasFurtivePatah(i, clusters)) {
+            out += "a" + consonantFor(cluster);
+            continue;
+          }
+
+          out += mapPlainCluster(cluster, i, clusters);
         }
 
         return out;
