@@ -1,7 +1,7 @@
 """
 uv sync
 wget https://huggingface.co/thewh1teagle/phonikud-onnx/resolve/main/phonikud-1.0.int8.onnx
-wget https://huggingface.co/thewh1teagle/renikud/resolve/main/model.onnx -O model.onnx
+wget https://huggingface.co/thewh1teagle/renikud/resolve/main/model.onnx -O renikud.onnx
 uv run app.py
 """
 
@@ -40,7 +40,7 @@ def generate():
             phonemes = renikud.phonemize(text)
         elif mode == "diacritics":
             with_diacritics = text
-            phonemes = renikud.phonemize(phonemes)
+            phonemes = renikud.phonemize(text)
         else:
             with_diacritics = None
     else:
