@@ -132,6 +132,50 @@
             </label>
           </div>
 
+          <div class="mt-5 grid gap-3 sm:grid-cols-[1fr_auto]">
+            <label class="block">
+              <span class="mb-2 block text-sm font-semibold text-slate-200">Phonikud server</span>
+              <input
+                id="phonikudServerInput"
+                type="url"
+                spellcheck="false"
+                class="w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none placeholder:text-slate-500 focus:border-cyan-300/60 focus:ring-4 focus:ring-cyan-300/10"
+                placeholder="http://localhost:7860"
+              />
+            </label>
+
+            <button
+              id="phonemizeButton"
+              type="button"
+              class="self-end rounded-2xl border border-white/10 bg-white/10 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/15 active:scale-[0.98] disabled:cursor-wait disabled:opacity-70"
+            >
+              Phonemize
+            </button>
+          </div>
+
+          <div id="phonemizePanel" class="mt-4 hidden space-y-3" aria-live="polite">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <p id="phonemizeStatus" class="text-sm text-slate-400"></p>
+              <button
+                id="copyPhonemesButton"
+                type="button"
+                class="hidden rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-xs font-semibold text-white transition hover:bg-white/15 active:scale-[0.98]"
+              >
+                Copy phonemes
+              </button>
+            </div>
+            <div class="grid gap-3 sm:grid-cols-2">
+              <div>
+                <p class="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Diacritics</p>
+                <pre id="phonikudDiacriticsOutput" dir="rtl" class="min-h-24 whitespace-pre-wrap rounded-2xl border border-white/10 bg-slate-950/70 p-4 text-right text-lg leading-relaxed text-slate-100"></pre>
+              </div>
+              <div>
+                <p class="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Phonemes</p>
+                <pre id="phonikudPhonemesOutput" dir="ltr" class="min-h-24 whitespace-pre-wrap rounded-2xl border border-white/10 bg-slate-950/70 p-4 text-left text-lg leading-relaxed text-slate-100"></pre>
+              </div>
+            </div>
+          </div>
+
           <div class="mt-6 flex flex-wrap gap-3">
             <button
               id="copyButton"
@@ -227,6 +271,13 @@
     const finalAAsHe = document.getElementById("finalAAsHe");
     const showAyinAlef = document.getElementById("showAyinAlef");
     const qForQof = document.getElementById("qForQof");
+    const phonikudServerInput = document.getElementById("phonikudServerInput");
+    const phonemizeButton = document.getElementById("phonemizeButton");
+    const phonemizePanel = document.getElementById("phonemizePanel");
+    const phonemizeStatus = document.getElementById("phonemizeStatus");
+    const phonikudDiacriticsOutput = document.getElementById("phonikudDiacriticsOutput");
+    const phonikudPhonemesOutput = document.getElementById("phonikudPhonemesOutput");
+    const copyPhonemesButton = document.getElementById("copyPhonemesButton");
     const themeToggle = document.getElementById("themeToggle");
     const themeIcon = document.getElementById("themeIcon");
     const themeLabel = document.getElementById("themeLabel");
@@ -1213,6 +1264,7 @@ eretz yisrael=ארץ ישראל`;
     }
 
     const CSV_DICTIONARY_URL = "https://raw.githubusercontent.com/morrisalp/taatiknet/main/data/he_transliterations.csv";
+    const DEFAULT_PHONIKUD_SERVER = "http://localhost:7860";
 
     const phraseDictionary = new Map(parseDictionarySource(PHRASE_DICTIONARY_SOURCE));
     let dictionary = buildDictionary(5000);
@@ -1369,6 +1421,65 @@ eretz yisrael=ארץ ישראל`;
       csvLoadPanel.classList.remove("hidden");
       csvProgressBar.style.width = `${Math.max(0, Math.min(100, percent))}%`;
       csvLoadStatus.textContent = message;
+    }
+
+    function normalizeServerUrl(value) {
+      const trimmed = value.trim() || DEFAULT_PHONIKUD_SERVER;
+      return trimmed.replace(/\/+$/, "");
+    }
+
+    function currentHebrewText() {
+      const toHebrew = directionSelect.value === "latin-to-hebrew";
+      return toHebrew ? output.textContent.trim() : input.value.trim();
+    }
+
+    function setPhonemizeStatus(message) {
+      phonemizePanel.classList.remove("hidden");
+      phonemizeStatus.textContent = message;
+    }
+
+    async function phonemizeCurrentHebrew() {
+      const serverUrl = normalizeServerUrl(phonikudServerInput.value);
+      const hebrewText = currentHebrewText();
+
+      localStorage.setItem("phonikudServerUrl", serverUrl);
+      phonikudServerInput.value = serverUrl;
+
+      if (!hebrewText) {
+        setPhonemizeStatus("No Hebrew text to send.");
+        return;
+      }
+
+      phonemizeButton.disabled = true;
+      phonemizeButton.textContent = "Phonemizing...";
+      copyPhonemesButton.classList.add("hidden");
+      phonikudDiacriticsOutput.textContent = "";
+      phonikudPhonemesOutput.textContent = "";
+      setPhonemizeStatus("Sending Hebrew text to Phonikud...");
+
+      try {
+        const body = new FormData();
+        body.set("mode", /[\u0591-\u05C7]/u.test(hebrewText) ? "diacritics" : "text");
+        body.set("text", hebrewText);
+
+        const response = await fetch(`${serverUrl}/generate`, {
+          method: "POST",
+          body
+        });
+
+        if (!response.ok) throw new Error(`Server returned ${response.status}`);
+
+        const result = await response.json();
+        phonikudDiacriticsOutput.textContent = result.diacritics || "";
+        phonikudPhonemesOutput.textContent = result.phonemes || "";
+        copyPhonemesButton.classList.toggle("hidden", !result.phonemes);
+        setPhonemizeStatus("Phonemized.");
+      } catch (error) {
+        setPhonemizeStatus(`Phonemization failed: ${error.message}`);
+      } finally {
+        phonemizeButton.disabled = false;
+        phonemizeButton.textContent = "Phonemize";
+      }
     }
 
     async function loadCsvDictionary() {
@@ -1888,6 +1999,7 @@ eretz yisrael=ארץ ישראל`;
     }
 
     refreshDictionaryViews();
+    phonikudServerInput.value = localStorage.getItem("phonikudServerUrl") || DEFAULT_PHONIKUD_SERVER;
 
     input.addEventListener("input", convert);
     directionSelect.addEventListener("change", () => {
@@ -1899,6 +2011,25 @@ eretz yisrael=ארץ ישראל`;
     showAyinAlef.addEventListener("change", convert);
     qForQof.addEventListener("change", convert);
     loadCsvButton.addEventListener("click", loadCsvDictionary);
+    phonikudServerInput.addEventListener("change", () => {
+      localStorage.setItem("phonikudServerUrl", normalizeServerUrl(phonikudServerInput.value));
+    });
+    phonemizeButton.addEventListener("click", phonemizeCurrentHebrew);
+    copyPhonemesButton.addEventListener("click", async () => {
+      const text = phonikudPhonemesOutput.textContent.trim();
+
+      if (!text) {
+        setPhonemizeStatus("No phonemes to copy.");
+        return;
+      }
+
+      try {
+        await navigator.clipboard.writeText(text);
+        setPhonemizeStatus("Phonemes copied.");
+      } catch {
+        setPhonemizeStatus("Copy failed. Select the phonemes manually.");
+      }
+    });
 
     copyButton.addEventListener("click", async () => {
       const text = output.textContent.trim();
