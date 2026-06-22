@@ -132,7 +132,10 @@
         <aside class="border-t border-white/10 bg-slate-900/60 p-6 sm:p-8 lg:border-l lg:border-t-0 lg:p-10">
           <div class="flex items-center justify-between gap-4">
             <h2 class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-400">Hebrew output</h2>
-            <span id="charCount" class="rounded-full bg-white/10 px-3 py-1 text-xs text-slate-300">0 chars</span>
+            <div class="flex flex-wrap items-center justify-end gap-2">
+              <span id="dictionaryCount" class="rounded-full bg-white/10 px-3 py-1 text-xs text-slate-300">0 overrides</span>
+              <span id="charCount" class="rounded-full bg-white/10 px-3 py-1 text-xs text-slate-300">0 chars</span>
+            </div>
           </div>
 
           <div
@@ -143,7 +146,7 @@
 
           <div class="mt-6 rounded-2xl border border-amber-300/20 bg-amber-300/10 p-4 text-sm leading-6 text-amber-50">
             <strong class="font-semibold">Note:</strong>
-            This creates plausible unvocalized Hebrew. Latin → Hebrew is ambiguous, so words like
+            This uses a 5,000-entry override dictionary plus fallback rules to create plausible unvocalized Hebrew. Latin → Hebrew is ambiguous, so words like
             <span class="font-semibold">kh</span>, <span class="font-semibold">t</span>, and
             <span class="font-semibold">v</span> may have more than one correct Hebrew spelling.
           </div>
@@ -168,6 +171,7 @@
     const clearButton = document.getElementById("clearButton");
     const copyStatus = document.getElementById("copyStatus");
     const charCount = document.getElementById("charCount");
+    const dictionaryCount = document.getElementById("dictionaryCount");
     const vAsVav = document.getElementById("vAsVav");
     const finalAAsHe = document.getElementById("finalAAsHe");
     const themeToggle = document.getElementById("themeToggle");
@@ -192,16 +196,968 @@
       setTheme(currentTheme === "dark" ? "light" : "dark");
     });
 
-    const dictionary = new Map([
-      ["israel", "ישראל"],
-      ["yisrael", "ישראל"],
-      ["yerushalayim", "ירושלים"],
-      ["jerusalem", "ירושלים"],
-      ["tel aviv", "תל אביב"],
-      ["shalom", "שלום"],
-      ["torah", "תורה"],
-      ["ivrit", "עברית"]
+    const BASE_DICTIONARY_SOURCE = String.raw`ani=אני
+ata=אתה
+at=את
+hu=הוא
+hi=היא
+anachnu=אנחנו
+atem=אתם
+aten=אתן
+hem=הם
+hen=הן
+ze=זה
+zot=זאת
+ele=אלה
+elu=אלו
+shel=של
+sheli=שלי
+shelcha=שלך
+shelkha=שלך
+shelach=שלך
+shelanu=שלנו
+shelachem=שלכם
+shelakhem=שלכם
+shelachen=שלכן
+shelakhen=שלכן
+shelhem=שלהם
+shelhen=שלהן
+mi=מי
+ma=מה
+eich=איך
+eikh=איך
+eifo=איפה
+matai=מתי
+lama=למה
+kama=כמה
+eize=איזה
+eizo=איזו
+eilu=אילו
+ken=כן
+lo=לא
+ulay=אולי
+betach=בטח
+vadai=ודאי
+bevadai=בוודאי
+gam=גם
+rak=רק
+od=עוד
+kvar=כבר
+achshav=עכשיו
+akhshav=עכשיו
+az=אז
+po=פה
+kan=כאן
+sham=שם
+shama=שמה
+hayom=היום
+etmol=אתמול
+machar=מחר
+makhar=מחר
+tamid=תמיד
+lifamim=לפעמים
+paam=פעם
+pam=פעם
+pashut=פשוט
+mamash=ממש
+meod=מאוד
+yoter=יותר
+pachot=פחות
+pakhot=פחות
+harbe=הרבה
+ktzat=קצת
+ktsat=קצת
+kol=כל
+kulam=כולם
+kulan=כולן
+mishehu=מישהו
+mashehu=משהו
+klum=כלום
+shum=שום
+efshar=אפשר
+asur=אסור
+mutar=מותר
+zarich=צריך
+tzarich=צריך
+tsricha=צריכה
+tzricha=צריכה
+sababah=סבבה
+sababa=סבבה
+beseder=בסדר
+tov=טוב
+tova=טובה
+tovim=טובים
+tovot=טובות
+ra=רע
+raa=רעה
+raim=רעים
+raot=רעות
+yafe=יפה
+yafa=יפה
+yafim=יפים
+yafot=יפות
+gadol=גדול
+gdola=גדולה
+gdolim=גדולים
+gdolot=גדולות
+katan=קטן
+ktana=קטנה
+ktanim=קטנים
+ktanot=קטנות
+chadash=חדש
+khadash=חדש
+chadasha=חדשה
+khadasha=חדשה
+yashan=ישן
+yeshan=ישן
+chashuv=חשוב
+khashuv=חשוב
+chashuva=חשובה
+khashuva=חשובה
+nachon=נכון
+nakhon=נכון
+nachona=נכונה
+nakhona=נכונה
+acharon=אחרון
+akharon=אחרון
+rishon=ראשון
+sheni=שני
+shlishi=שלישי
+revii=רביעי
+chamishi=חמישי
+khamishi=חמישי
+shishi=שישי
+shvii=שביעי
+shemini=שמיני
+tshii=תשיעי
+asiri=עשירי
+shalom=שלום
+lehitraot=להתראות
+boker=בוקר
+boker tov=בוקר טוב
+erev=ערב
+erev tov=ערב טוב
+laila=לילה
+laila tov=לילה טוב
+toda=תודה
+todah=תודה
+bevakasha=בבקשה
+slicha=סליחה
+slikha=סליחה
+mazal=מזל
+mazel=מזל
+bracha=ברכה
+brakha=ברכה
+simcha=שמחה
+simkha=שמחה
+ahava=אהבה
+emet=אמת
+sheker=שקר
+shalva=שלווה
+tikva=תקווה
+tikvah=תקווה
+koach=כוח
+koakh=כוח
+ruach=רוח
+ruakh=רוח
+nefesh=נפש
+neshama=נשמה
+lev=לב
+rosh=ראש
+ayin=עין
+eynayim=עיניים
+ozen=אוזן
+oznayim=אוזניים
+af=אף
+pe=פה
+yad=יד
+yadayim=ידיים
+regel=רגל
+raglayim=רגליים
+guf=גוף
+panim=פנים
+sear=שיער
+kol=קול
+shem=שם
+bayit=בית
+beyt=בית
+dira=דירה
+cheder=חדר
+kheder=חדר
+salon=סלון
+mitbach=מטבח
+mitbakh=מטבח
+sherutim=שירותים
+miklachat=מקלחת
+miklakhat=מקלחת
+delett=דלת
+delet=דלת
+chalon=חלון
+khalon=חלון
+kise=כיסא
+shulchan=שולחן
+shulkhan=שולחן
+mita=מיטה
+aron=ארון
+menora=מנורה
+or=אור
+choshech=חושך
+khoshekh=חושך
+esh=אש
+mayim=מים
+adama=אדמה
+shamayim=שמיים
+shemesh=שמש
+yareach=ירח
+yareakh=ירח
+kochav=כוכב
+kokhav=כוכב
+olam=עולם
+aretz=ארץ
+eretz=ארץ
+medina=מדינה
+ir=עיר
+rechov=רחוב
+rekhov=רחוב
+kvish=כביש
+derech=דרך
+derekh=דרך
+makom=מקום
+mkomot=מקומות
+kfar=כפר
+har=הר
+yam=ים
+nahar=נהר
+agam=אגם
+midbar=מדבר
+yaar=יער
+gan=גן
+park=פארק
+beit=בית
+sefer=ספר
+beitsefer=ביתספר
+universita=אוניברסיטה
+kita=כיתה
+more=מורה
+mora=מורה
+talmid=תלמיד
+talmida=תלמידה
+student=סטודנט
+studentit=סטודנטית
+limud=לימוד
+shiur=שיעור
+mivchan=מבחן
+mivkhan=מבחן
+sefer=ספר
+sfarim=ספרים
+machberet=מחברת
+makhberet=מחברת
+iparon=עיפרון
+et=עט
+tik=תיק
+machshev=מחשב
+makhshev=מחשב
+telefon=טלפון
+pelefon=פלאפון
+mispar=מספר
+ktovet=כתובת
+michtav=מכתב
+mikhtav=מכתב
+hodaah=הודעה
+mail=מייל
+doar=דואר
+kesef=כסף
+mechir=מחיר
+mekhir=מחיר
+matbea=מטבע
+cheshbon=חשבון
+kheshbon=חשבון
+avoda=עבודה
+oved=עובד
+ovedet=עובדת
+misrada=משרד
+misrad=משרד
+cheshmal=חשמל
+kheshmal=חשמל
+internet=אינטרנט
+muzika=מוזיקה
+sir=שיר
+shir=שיר
+srat=סרט
+seret=סרט
+teatron=תיאטרון
+misada=מסעדה
+cafe=קפה
+kafe=קפה
+ochel=אוכל
+okhel=אוכל
+lechem=לחם
+lekhem=לחם
+chalav=חלב
+khalav=חלב
+gvina=גבינה
+beytsa=ביצה
+beitsa=ביצה
+dag=דג
+basar=בשר
+of=עוף
+yerek=ירק
+yerakot=ירקות
+pri=פרי
+perot=פירות
+tapuach=תפוח
+tapuakh=תפוח
+agvaniya=עגבנייה
+melafefon=מלפפון
+gezer=גזר
+batata=בטטה
+tapuz=תפוז
+limon=לימון
+banana=בננה
+anafim=ענבים
+anavim=ענבים
+tutim=תותים
+melon=מלון
+avatiach=אבטיח
+avatiakh=אבטיח
+marak=מרק
+salat=סלט
+orez=אורז
+pasta=פסטה
+sukar=סוכר
+melach=מלח
+melakh=מלח
+pilpel=פלפל
+shemen=שמן
+yayin=יין
+bira=בירה
+kosos=כוסות
+kos=כוס
+tsalachat=צלחת
+tzalachat=צלחת
+mazleg=מזלג
+sakin=סכין
+kapit=כפית
+kaf=כף
+chaver=חבר
+khaver=חבר
+chavera=חברה
+khavera=חברה
+chaverim=חברים
+khaverim=חברים
+haver=חבר
+havera=חברה
+haverim=חברים
+mishpacha=משפחה
+mishpakha=משפחה
+aba=אבא
+ima=אמא
+av=אב
+em=אם
+ben=בן
+bat=בת
+ach=אח
+akh=אח
+achot=אחות
+akhot=אחות
+savta=סבתא
+saba=סבא
+dod=דוד
+doda=דודה
+yeled=ילד
+yalda=ילדה
+yeladim=ילדים
+yeladot=ילדות
+isha=אישה
+ish=איש
+anashim=אנשים
+gever=גבר
+geveret=גברת
+bachur=בחור
+bakhur=בחור
+bachura=בחורה
+bakhura=בחורה
+tinok=תינוק
+tinoket=תינוקת
+chatul=חתול
+khatul=חתול
+chatula=חתולה
+khatula=חתולה
+kelev=כלב
+kalba=כלבה
+sus=סוס
+para=פרה
+keves=כבש
+ayil=איל
+tzipor=ציפור
+tsipor=ציפור
+dvorah=דבורה
+dvora=דבורה
+nesher=נשר
+ari=אריה
+arye=אריה
+pil=פיל
+kof=קוף
+rofe=רופא
+rofaa=רופאה
+achot=אחות
+akhot=אחות
+machala=מחלה
+makhala=מחלה
+briyut=בריאות
+trufa=תרופה
+beit cholim=בית חולים
+beit kholim=בית חולים
+merkaz=מרכז
+kupat cholim=קופת חולים
+kupat kholim=קופת חולים
+mishpataim=משקפיים
+mishkafayim=משקפיים
+beged=בגד
+bgadim=בגדים
+chultza=חולצה
+khultza=חולצה
+michnasayim=מכנסיים
+mikhnasayim=מכנסיים
+naalayim=נעליים
+garbayim=גרביים
+kova=כובע
+meil=מעיל
+simla=שמלה
+tabaat=טבעת
+shaon=שעון
+machshir=מכשיר
+makhshir=מכשיר
+regel=רגל
+degem=דגם
+mishtamesh=משתמש
+sisma=סיסמה
+sismah=סיסמה
+shaar=שער
+davar=דבר
+dvarim=דברים
+inyan=עניין
+sipor=סיפור
+sippur=סיפור
+milim=מילים
+mila=מילה
+ot=אות
+otiyot=אותיות
+safa=שפה
+ivrit=עברית
+anglit=אנגלית
+aravit=ערבית
+rusit=רוסית
+ukrainit=אוקראינית
+frantsuzit=צרפתית
+sfaradit=ספרדית
+germanit=גרמנית
+italyakit=איטלקית
+sinits=סינית
+sinit=סינית
+dat=דת
+yehudi=יהודי
+yehudit=יהודית
+tfila=תפילה
+tefila=תפילה
+beit kneset=בית כנסת
+shabat=שבת
+shabbat=שבת
+chag=חג
+khag=חג
+moed=מועד
+pesach=פסח
+pesakh=פסח
+sukot=סוכות
+chanuka=חנוכה
+khanuka=חנוכה
+purim=פורים
+rosh=ראש
+shana=שנה
+kippur=כיפור
+torah=תורה
+tanach=תנך
+tanakh=תנך
+mitzva=מצווה
+mitsva=מצווה
+mitzvah=מצווה
+rav=רב
+elohim=אלוהים
+adonai=אדוני
+shalach=שלח
+shalakh=שלח
+halacha=הלכה
+halakha=הלכה
+chok=חוק
+khok=חוק
+mishpat=משפט
+mediniyut=מדיניות
+memshala=ממשלה
+kneset=כנסת
+nasi=נשיא
+sar=שר
+sara=שרה
+mishtara=משטרה
+chayal=חייל
+khayal=חייל
+tzava=צבא
+tsava=צבא
+shalom=שלום
+milchama=מלחמה
+milkhama=מלחמה
+bitachon=ביטחון
+bitakhon=ביטחון
+chofesh=חופש
+khofesh=חופש
+cherut=חרות
+kherut=חרות
+zchut=זכות
+zkhoot=זכות
+zkhut=זכות
+rishayon=רישיון
+minhag=מנהג
+tarbut=תרבות
+omanut=אומנות
+sport=ספורט
+kaduregel=כדורגל
+kadursal=כדורסל
+schiya=שחייה
+skhiya=שחייה
+rikud=ריקוד
+mischak=משחק
+miskhak=משחק
+mishak=משחק
+netzachon=ניצחון
+nitsachon=ניצחון
+hefsed=הפסד
+kvutza=קבוצה
+mispar=מספר
+echad=אחד
+ekhad=אחד
+achat=אחת
+akhat=אחת
+shtayim=שתיים
+shnayim=שניים
+shlosha=שלושה
+shalosh=שלוש
+arba=ארבע
+arbaa=ארבעה
+chamesh=חמש
+khamesh=חמש
+chamisha=חמישה
+khamisha=חמישה
+shesh=שש
+shisha=שישה
+sheva=שבע
+shivaa=שבעה
+shmone=שמונה
+tesha=תשע
+tisha=תשעה
+eser=עשר
+asara=עשרה
+esrim=עשרים
+shloshim=שלושים
+arbaim=ארבעים
+chamishim=חמישים
+khamishim=חמישים
+shishim=שישים
+shivim=שבעים
+shmonim=שמונים
+tishim=תשעים
+mea=מאה
+matayim=מאתיים
+elef=אלף
+alfayim=אלפיים
+milyon=מיליון
+zero=אפס
+efes=אפס
+adom=אדום
+aduma=אדומה
+kachol=כחול
+kakhol=כחול
+kachola=כחולה
+kakhola=כחולה
+yarok=ירוק
+yeruka=ירוקה
+tzahov=צהוב
+tsahov=צהוב
+lavan=לבן
+levana=לבנה
+shachor=שחור
+shakhor=שחור
+shchora=שחורה
+skhora=שחורה
+sagol=סגול
+varod=ורוד
+chum=חום
+khum=חום
+katom=כתום
+kesef=כסף
+zahav=זהב
+keshet=קשת
+ani rotze=אני רוצה
+rotze=רוצה
+rotsa=רוצה
+rotzim=רוצים
+rotsot=רוצות
+ohev=אוהב
+ohevet=אוהבת
+ohavim=אוהבים
+ohavot=אוהבות
+sone=שונא
+sonet=שונאת
+yodea=יודע
+yodaat=יודעת
+makir=מכיר
+makira=מכירה
+chosev=חושב
+khosev=חושב
+choshevet=חושבת
+khoshevet=חושבת
+omer=אומר
+omeret=אומרת
+medaber=מדבר
+medaberet=מדברת
+shomea=שומע
+shomaat=שומעת
+roe=רואה
+roa=רואה
+roaah=רואה
+kore=קורא
+koret=קוראת
+kotev=כותב
+kotevet=כותבת
+lomed=לומד
+lomedet=לומדת
+melamed=מלמד
+melamedet=מלמדת
+holech=הולך
+holekh=הולך
+holechet=הולכת
+holekhet=הולכת
+ba=בא
+baa=באה
+baim=באים
+baot=באות
+nossea=נוסע
+nosea=נוסע
+nosa=נוסע
+nosaet=נוסעת
+yoshev=יושב
+yoshevet=יושבת
+omed=עומד
+omedet=עומדת
+ra=ראה
+raiti=ראיתי
+raita=ראית
+raiti=ראיתי
+raiti=ראיתי
+sam=שם
+sama=שמה
+lakach=לקח
+lakakh=לקח
+lokach=לוקח
+lokakh=לוקח
+lokeach=לוקח
+lokeakh=לוקח
+noten=נותן
+oten=נותנת
+mekabel=מקבל
+mekabelet=מקבלת
+poseach=פותח
+poteach=פותח
+poteakh=פותח
+soger=סוגר
+sogeret=סוגרת
+ose=עושה
+osa=עושה
+osim=עושים
+osot=עושות
+achol=אכול
+leechol=לאכול
+leekhol=לאכול
+ochel=אוכל
+okhel=אוכל
+ochelet=אוכלת
+okhelet=אוכלת
+shote=שותה
+shotah=שותה
+yashen=ישן
+yeshena=ישנה
+mitkaven=מתכוון
+mitkavenet=מתכוונת
+mevin=מבין
+mevina=מבינה
+zocher=זוכר
+zokher=זוכר
+zocheret=זוכרת
+zokheret=זוכרת
+shoel=שואל
+shoelet=שואלת
+one=עונה
+ona=עונה
+mechapes=מחפש
+mekhapes=מחפש
+mechapeset=מחפשת
+mekhapeset=מחפשת
+motze=מוצא
+motset=מוצאת
+matzliach=מצליח
+matsliach=מצליח
+matzliakh=מצליח
+nishar=נשאר
+nisheret=נשארת
+nigmar=נגמר
+matchil=מתחיל
+matkhil=מתחיל
+matchila=מתחילה
+matkhila=מתחילה
+magia=מגיע
+magiaa=מגיעה
+yachol=יכול
+yakhol=יכול
+yechola=יכולה
+yekhola=יכולה
+zarich=צריך
+tzarich=צריך
+sricha=צריכה
+tzricha=צריכה
+chayav=חייב
+khayav=חייב
+chayevet=חייבת
+khayevet=חייבת
+assiti=עשיתי
+asiti=עשיתי
+haya=היה
+hayta=הייתה
+hayiti=הייתי
+ihye=יהיה
+tihiye=תהיה
+lihyot=להיות
+yesh=יש
+ein=אין
+hinei=הנה
+hineni=הנני
+nira=נראה
+nire=נראה
+telaviv=תל אביב
+yerushalayim=ירושלים
+jerusalem=ירושלים
+haifa=חיפה
+cheifa=חיפה
+kheifa=חיפה
+beer sheva=באר שבע
+beersheva=באר שבע
+ashdod=אשדוד
+ashkelon=אשקלון
+netanya=נתניה
+herzliya=הרצליה
+petach tikva=פתח תקווה
+petah tikva=פתח תקווה
+rishon letsiyon=ראשון לציון
+rishon lezion=ראשון לציון
+rehovot=רחובות
+rechovot=רחובות
+rekhovot=רחובות
+modiin=מודיעין
+eilat=אילת
+tverya=טבריה
+tiberias=טבריה
+tsfat=צפת
+tzfat=צפת
+akko=עכו
+ako=עכו
+yafo=יפו
+jafa=יפו
+jaffa=יפו
+israel=ישראל
+yisrael=ישראל
+ivrit=עברית
+yehuda=יהודה
+galil=גליל
+negev=נגב
+sharon=שרון
+golan=גולן
+yarden=ירדן
+kinneret=כנרת
+sinai=סיני
+mizrachi=מזרחי
+maaravi=מערבי
+tzafon=צפון
+tsafon=צפון
+darom=דרום
+mizrach=מזרח
+mizrakh=מזרח
+maarav=מערב
+merkaz=מרכז
+shmuel=שמואל
+david=דוד
+moshe=משה
+avraham=אברהם
+yitzchak=יצחק
+yitschak=יצחק
+yitzkhak=יצחק
+yaakov=יעקב
+yosef=יוסף
+sara=שרה
+rivka=רבקה
+rachel=רחל
+rakhel=רחל
+lea=לאה
+miriam=מרים
+aharon=אהרון
+dvora=דבורה
+shlomo=שלמה
+eliyahu=אליהו
+daniel=דניאל
+noa=נועה
+tamar=תמר
+yael=יעל
+maya=מאיה
+michal=מיכל
+mikhal=מיכל
+yonatan=יונתן
+natan=נתן
+idan=עידן
+omer=עומר
+eitan=איתן
+itay=איתי
+lior=ליאור
+orly=אורלי
+yehuda=יהודה
+yehor=יהור
+yehoram=יהורם`;
+
+    const PHRASE_DICTIONARY_SOURCE = String.raw`tel aviv=תל אביב
+beit shemesh=בית שמש
+beer sheva=באר שבע
+petach tikva=פתח תקווה
+petah tikva=פתח תקווה
+rishon lezion=ראשון לציון
+rishon letsiyon=ראשון לציון
+bnei brak=בני ברק
+kiryat shmona=קריית שמונה
+rosh hashana=ראש השנה
+yom kippur=יום כיפור
+chag sameach=חג שמח
+khag sameach=חג שמח
+shabat shalom=שבת שלום
+shabbat shalom=שבת שלום
+boker tov=בוקר טוב
+erev tov=ערב טוב
+laila tov=לילה טוב
+ani ohev=אני אוהב
+ani ohevet=אני אוהבת
+ma nishma=מה נשמע
+hakol beseder=הכול בסדר
+kol hakavod=כל הכבוד
+mazal tov=מזל טוב
+beit sefer=בית ספר
+beit kneset=בית כנסת
+beit cholim=בית חולים
+beit kholim=בית חולים
+kupat cholim=קופת חולים
+kupat kholim=קופת חולים
+medinat yisrael=מדינת ישראל
+am yisrael=עם ישראל
+eretz yisrael=ארץ ישראל`;
+
+    const PREFIX_VARIANTS = [
+      ["ha", "ה"], ["he", "ה"],
+      ["ve", "ו"], ["v", "ו"], ["u", "ו"],
+      ["le", "ל"], ["la", "ל"], ["li", "ל"],
+      ["be", "ב"], ["ba", "ב"], ["bi", "ב"],
+      ["ke", "כ"], ["ka", "כ"], ["ki", "כ"],
+      ["mi", "מ"], ["me", "מ"],
+      ["she", "ש"], ["kshe", "כש"], ["keshe", "כש"]
+    ];
+
+    const NON_PREFIXABLE_WORDS = new Set([
+      "ani", "ata", "at", "hu", "hi", "anachnu", "atem", "aten", "hem", "hen",
+      "ze", "zot", "ele", "elu", "mi", "ma", "eich", "eikh", "eifo", "matai",
+      "lama", "kama", "ken", "lo", "ulay", "gam", "rak", "od", "kvar", "az",
+      "po", "kan", "sham", "hayom", "etmol", "machar", "makhar", "tamid"
     ]);
+
+    function parseDictionarySource(source) {
+      return source
+        .trim()
+        .split(/\n+/)
+        .map(line => line.trim())
+        .filter(Boolean)
+        .map(line => {
+          const separatorIndex = line.indexOf("=");
+          return [
+            line.slice(0, separatorIndex).trim().toLowerCase(),
+            line.slice(separatorIndex + 1).trim()
+          ];
+        })
+        .filter(([latin, hebrew]) => latin && hebrew);
+    }
+
+    function addDictionaryEntry(map, latin, hebrew) {
+      if (!latin || !hebrew || map.has(latin)) return;
+      map.set(latin, hebrew);
+    }
+
+    function addPopularVariants(map, latin, hebrew) {
+      const candidates = new Set([latin]);
+
+      if (latin.includes("kh")) candidates.add(latin.replaceAll("kh", "ch"));
+      if (latin.includes("ch")) candidates.add(latin.replaceAll("ch", "kh"));
+      if (latin.includes("ts")) candidates.add(latin.replaceAll("ts", "tz"));
+      if (latin.includes("tz")) candidates.add(latin.replaceAll("tz", "ts"));
+      if (latin.endsWith("ah")) candidates.add(latin.slice(0, -1));
+      if (latin.endsWith("a")) candidates.add(`${latin}h`);
+
+      for (const candidate of candidates) {
+        addDictionaryEntry(map, candidate, hebrew);
+      }
+    }
+
+    function buildDictionary(targetSize = 5000) {
+      const map = new Map();
+      const baseEntries = parseDictionarySource(BASE_DICTIONARY_SOURCE);
+
+      for (const [latin, hebrew] of baseEntries) {
+        addPopularVariants(map, latin, hebrew);
+      }
+
+      const prefixableEntries = baseEntries.filter(([latin]) =>
+        !latin.includes(" ") && !NON_PREFIXABLE_WORDS.has(latin)
+      );
+
+      outer:
+      for (const [latinPrefix, hebrewPrefix] of PREFIX_VARIANTS) {
+        for (const [latin, hebrew] of prefixableEntries) {
+          addPopularVariants(map, `${latinPrefix}${latin}`, `${hebrewPrefix}${hebrew}`);
+          if (map.size >= targetSize) break outer;
+        }
+      }
+
+      return map;
+    }
+
+    const phraseDictionary = new Map(parseDictionarySource(PHRASE_DICTIONARY_SOURCE));
+    const dictionary = buildDictionary(5000);
+
+
+    function escapeRegExp(value) {
+      return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    }
+
+    const phrasePatterns = Array.from(phraseDictionary.entries())
+      .sort((a, b) => b[0].length - a[0].length)
+      .map(([latin, hebrew]) => ({
+        pattern: new RegExp(`(^|[^A-Za-z])${escapeRegExp(latin).replace(/\\s+/g, "\\s+")}($|[^A-Za-z])`, "gi"),
+        hebrew
+      }));
+
+    function applyPhraseDictionary(text) {
+      return phrasePatterns.reduce((result, { pattern, hebrew }) => {
+        return result.replace(pattern, (match, before, after) => `${before}${hebrew}${after}`);
+      }, text);
+    }
 
     function latinToHebrew(text, options = {}) {
       const settings = {
@@ -358,8 +1314,10 @@
         return applyFinalForm(out);
       }
 
+      const phraseExpandedText = applyPhraseDictionary(text);
+
       // Preserve whitespace and punctuation while transliterating Latin word runs.
-      return text
+      return phraseExpandedText
         .match(/[A-Za-z'’ʼʾ‘ʿ`]+|[^A-Za-z'’ʼʾ‘ʿ`]+/g)
         ?.map(part => /[A-Za-z]/.test(part) ? transliterateWord(part) : part)
         .join("") || "";
@@ -375,6 +1333,8 @@
       charCount.textContent = `${Array.from(hebrew).length} chars`;
       copyStatus.textContent = "";
     }
+
+    dictionaryCount.textContent = `${dictionary.size.toLocaleString()} overrides`;
 
     input.addEventListener("input", convert);
     vAsVav.addEventListener("change", convert);
