@@ -132,6 +132,13 @@
             </label>
           </div>
 
+          <div class="mt-5 grid gap-3">
+            <label class="flex cursor-pointer items-center justify-between rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm text-slate-200">
+              <span>Use dictionary overrides</span>
+              <input id="useDictionaryOverrides" type="checkbox" class="h-5 w-5 accent-cyan-300" />
+            </label>
+          </div>
+
           <div class="mt-5 grid gap-3 sm:grid-cols-[1fr_0.55fr_auto]">
             <label class="block">
               <span class="mb-2 block text-sm font-semibold text-slate-200">Phonikud server</span>
@@ -315,6 +322,7 @@
     const finalAAsHe = document.getElementById("finalAAsHe");
     const showAyinAlef = document.getElementById("showAyinAlef");
     const qForQof = document.getElementById("qForQof");
+    const useDictionaryOverrides = document.getElementById("useDictionaryOverrides");
     const phonikudServerInput = document.getElementById("phonikudServerInput");
     const phonemizeBackendSelect = document.getElementById("phonemizeBackendSelect");
     const phonemizeButton = document.getElementById("phonemizeButton");
@@ -1317,6 +1325,7 @@ eretz yisrael=ארץ ישראל`;
     const CSV_DICTIONARY_URL = "https://raw.githubusercontent.com/morrisalp/taatiknet/main/data/he_transliterations.csv";
     const DEFAULT_PHONIKUD_SERVER = "http://localhost:7860";
     const DEFAULT_PHONEMIZE_BACKEND = "renikud";
+    const DEFAULT_USE_DICTIONARY_OVERRIDES = false;
 
     const phraseDictionary = new Map(parseDictionarySource(PHRASE_DICTIONARY_SOURCE));
     let dictionary = buildDictionary(5000);
@@ -1466,7 +1475,8 @@ eretz yisrael=ארץ ישראל`;
       dictionarySourceLabel = sourceLabel;
       reverseDictionary = buildReverseDictionary();
       reversePatterns = buildReversePatterns();
-      dictionaryCount.textContent = `${dictionarySourceLabel}: ${dictionary.size.toLocaleString()} Latin→Hebrew • ${reverseDictionary.size.toLocaleString()} Hebrew→Latin`;
+      const state = useDictionaryOverrides.checked ? "on" : "off";
+      dictionaryCount.textContent = `${dictionarySourceLabel} dictionary ${state}: ${dictionary.size.toLocaleString()} Latin→Hebrew • ${reverseDictionary.size.toLocaleString()} Hebrew→Latin`;
     }
 
     function setCsvProgress(percent, message) {
@@ -1488,6 +1498,10 @@ eretz yisrael=ארץ ישראל`;
     function setPhonemizeStatus(message) {
       phonemizePanel.classList.remove("hidden");
       phonemizeStatus.textContent = message;
+    }
+
+    function selectedPhonemizeBackend() {
+      return phonemizeBackendSelect.value === "phonikud" ? "phonikud" : "renikud";
     }
 
     function latinizeIpaPhonemes(value) {
@@ -1776,14 +1790,54 @@ eretz yisrael=ארץ ישראל`;
       return sentenceCase(value.replace(ipaWords, ukrainianizeWord));
     }
 
-    async function phonemizeCurrentHebrew() {
+    async function requestPhonemization(hebrewText) {
       const serverUrl = normalizeServerUrl(phonikudServerInput.value);
-      const backend = phonemizeBackendSelect.value === "phonikud" ? "phonikud" : "renikud";
-      const hebrewText = currentHebrewText();
+      const backend = selectedPhonemizeBackend();
 
       localStorage.setItem("phonikudServerUrl", serverUrl);
       localStorage.setItem("phonemizeBackend", backend);
       phonikudServerInput.value = serverUrl;
+
+      const body = new FormData();
+      body.set("mode", /[\u0591-\u05C7]/u.test(hebrewText) ? "diacritics" : "text");
+      body.set("text", hebrewText);
+      body.set("backend", backend);
+
+      const response = await fetch(`${serverUrl}/generate`, {
+        method: "POST",
+        body
+      });
+
+      if (!response.ok) throw new Error(`Server returned ${response.status}`);
+
+      const result = await response.json();
+      const phonemes = result.phonemes || "";
+
+      return {
+        backend: result.backend || backend,
+        diacritics: result.diacritics || "",
+        phonemes,
+        latinized: latinizeIpaPhonemes(phonemes),
+        cyrillic: russianizeIpaPhonemes(phonemes),
+        cyrillicUa: ukrainianizeIpaPhonemes(phonemes)
+      };
+    }
+
+    function renderPhonemizationResult(result) {
+      phonikudDiacriticsOutput.textContent = result.diacritics;
+      phonikudPhonemesOutput.textContent = result.phonemes;
+      phonikudLatinizedOutput.textContent = result.latinized;
+      phonikudRussianOutput.textContent = result.cyrillic;
+      phonikudUkrainianCyrillicOutput.textContent = result.cyrillicUa;
+      copyPhonemesButton.classList.toggle("hidden", !result.phonemes);
+      copyLatinizedButton.classList.toggle("hidden", !result.latinized);
+      copyRussianButton.classList.toggle("hidden", !result.cyrillic);
+      copyUkrainianCyrillicButton.classList.toggle("hidden", !result.cyrillicUa);
+      setPhonemizeStatus(`Phonemized with ${result.backend}.`);
+    }
+
+    async function phonemizeCurrentHebrew() {
+      const hebrewText = currentHebrewText();
 
       if (!hebrewText) {
         setPhonemizeStatus("No Hebrew text to send.");
@@ -1801,36 +1855,15 @@ eretz yisrael=ארץ ישראל`;
       phonikudLatinizedOutput.textContent = "";
       phonikudRussianOutput.textContent = "";
       phonikudUkrainianCyrillicOutput.textContent = "";
-      setPhonemizeStatus("Sending Hebrew text to Phonikud...");
+      setPhonemizeStatus(`Sending Hebrew text to ${selectedPhonemizeBackend()}...`);
 
       try {
-        const body = new FormData();
-        body.set("mode", /[\u0591-\u05C7]/u.test(hebrewText) ? "diacritics" : "text");
-        body.set("text", hebrewText);
-        body.set("backend", backend);
-
-        const response = await fetch(`${serverUrl}/generate`, {
-          method: "POST",
-          body
-        });
-
-        if (!response.ok) throw new Error(`Server returned ${response.status}`);
-
-        const result = await response.json();
-        const phonemes = result.phonemes || "";
-        const latinized = latinizeIpaPhonemes(phonemes);
-        const russianized = russianizeIpaPhonemes(phonemes);
-        const ukrainianized = ukrainianizeIpaPhonemes(phonemes);
-        phonikudDiacriticsOutput.textContent = result.diacritics || "";
-        phonikudPhonemesOutput.textContent = phonemes;
-        phonikudLatinizedOutput.textContent = latinized;
-        phonikudRussianOutput.textContent = russianized;
-        phonikudUkrainianCyrillicOutput.textContent = ukrainianized;
-        copyPhonemesButton.classList.toggle("hidden", !phonemes);
-        copyLatinizedButton.classList.toggle("hidden", !latinized);
-        copyRussianButton.classList.toggle("hidden", !russianized);
-        copyUkrainianCyrillicButton.classList.toggle("hidden", !ukrainianized);
-        setPhonemizeStatus(`Phonemized with ${result.backend || backend}.`);
+        const result = await requestPhonemization(hebrewText);
+        renderPhonemizationResult(result);
+        if (directionSelect.value === "hebrew-to-latin") {
+          output.textContent = result.latinized;
+          charCount.textContent = `${Array.from(result.latinized).length} chars`;
+        }
       } catch (error) {
         setPhonemizeStatus(`Phonemization failed: ${error.message}`);
       } finally {
@@ -1880,7 +1913,7 @@ eretz yisrael=ארץ ישראל`;
 
         dictionary = csvDictionary;
         refreshDictionaryViews("CSV");
-        setCsvProgress(100, `Loaded ${dictionary.size.toLocaleString()} CSV entries.`);
+        setCsvProgress(100, `Loaded ${dictionary.size.toLocaleString()} CSV entries. Enable dictionary overrides to use them.`);
         loadCsvButton.textContent = "CSV dictionary loaded";
         convert();
       } catch (error) {
@@ -1895,7 +1928,8 @@ eretz yisrael=ארץ ישראל`;
       const settings = {
         vAs: options.vAs || "bet",
         finalKhAsKaf: true,
-        finalAAsHe: options.finalAAsHe !== false
+        finalAAsHe: options.finalAAsHe !== false,
+        useDictionary: Boolean(options.useDictionary)
       };
 
       const finalForms = {
@@ -1929,7 +1963,7 @@ eretz yisrael=ארץ ישראל`;
       function transliterateWord(rawWord) {
         const word = normalizeWord(rawWord);
 
-        if (dictionary.has(word)) {
+        if (settings.useDictionary && dictionary.has(word)) {
           return dictionary.get(word);
         }
 
@@ -2041,7 +2075,7 @@ eretz yisrael=ארץ ישראל`;
         return applyFinalForm(out);
       }
 
-      const phraseExpandedText = applyPhraseDictionary(text);
+      const phraseExpandedText = settings.useDictionary ? applyPhraseDictionary(text) : text;
 
       // Preserve whitespace and punctuation while transliterating Latin word runs.
       return phraseExpandedText
@@ -2053,7 +2087,8 @@ eretz yisrael=ארץ ישראל`;
     function hebrewToLatin(text, options = {}) {
       const settings = {
         showAyinAlef: Boolean(options.showAyinAlef),
-        qForQof: options.qForQof !== false
+        qForQof: options.qForQof !== false,
+        useDictionary: Boolean(options.useDictionary)
       };
 
       const HEBREW_TOKEN = /[\u0590-\u05FF]+/u;
@@ -2254,7 +2289,7 @@ eretz yisrael=ארץ ישראל`;
         const overrideKey = rawWord.normalize("NFD").replace(/[\u0591-\u05AF\u05BD\u05BF\u05C0\u05C4-\u05C5]/g, "").normalize("NFC");
         const vocalizedKey = rawWord.normalize("NFC").trim();
 
-        if (hasVocalization && vocalizedReverseDictionary.has(vocalizedKey)) {
+        if (settings.useDictionary && hasVocalization && vocalizedReverseDictionary.has(vocalizedKey)) {
           return vocalizedReverseDictionary.get(vocalizedKey);
         }
 
@@ -2262,7 +2297,7 @@ eretz yisrael=ארץ ישראל`;
           return QAMATS_QATAN_OVERRIDES.get(overrideKey);
         }
 
-        if (!hasVocalization && reverseDictionary.has(normalizedWord)) {
+        if (settings.useDictionary && !hasVocalization && reverseDictionary.has(normalizedWord)) {
           return reverseDictionary.get(normalizedWord);
         }
 
@@ -2305,7 +2340,7 @@ eretz yisrael=ארץ ישראל`;
           .replace(/ow/g, "o");
       }
 
-      const dictionaryExpandedText = NIQQUD.test(text) ? text : applyReverseDictionary(text);
+      const dictionaryExpandedText = settings.useDictionary && !NIQQUD.test(text) ? applyReverseDictionary(text) : text;
 
       return dictionaryExpandedText
         .match(/[\u0590-\u05FF]+|[^\u0590-\u05FF]+/gu)
@@ -2338,23 +2373,68 @@ eretz yisrael=ארץ ישראל`;
       });
     }
 
+    let autoPhonemizeTimer = null;
+    let autoPhonemizeRequestId = 0;
+
+    function cancelAutoPhonemize() {
+      if (autoPhonemizeTimer) {
+        clearTimeout(autoPhonemizeTimer);
+        autoPhonemizeTimer = null;
+      }
+      autoPhonemizeRequestId++;
+    }
+
+    function scheduleAutoPhonemize(hebrewText) {
+      cancelAutoPhonemize();
+
+      const text = hebrewText.trim();
+      if (!text) return;
+
+      const requestId = autoPhonemizeRequestId;
+      copyStatus.textContent = "Phonemizing...";
+
+      autoPhonemizeTimer = setTimeout(async () => {
+        try {
+          const result = await requestPhonemization(text);
+          if (requestId !== autoPhonemizeRequestId) return;
+
+          renderPhonemizationResult(result);
+          output.textContent = result.latinized;
+          charCount.textContent = `${Array.from(result.latinized).length} chars`;
+          copyStatus.textContent = `Phonemized with ${result.backend}`;
+        } catch (error) {
+          if (requestId !== autoPhonemizeRequestId) return;
+          copyStatus.textContent = `Phonemizer unavailable: ${error.message}`;
+        }
+      }, 350);
+    }
+
     function convert() {
       const toHebrew = directionSelect.value === "latin-to-hebrew";
       const converted = toHebrew
         ? latinToHebrew(input.value, {
             vAs: vAsVav.checked ? "vav" : "bet",
-            finalAAsHe: finalAAsHe.checked
+            finalAAsHe: finalAAsHe.checked,
+            useDictionary: useDictionaryOverrides.checked
           })
         : hebrewToLatin(input.value, {
             showAyinAlef: showAyinAlef.checked,
-            qForQof: qForQof.checked
+            qForQof: qForQof.checked,
+            useDictionary: useDictionaryOverrides.checked
           });
 
       output.textContent = converted;
       charCount.textContent = `${Array.from(converted).length} chars`;
       copyStatus.textContent = "";
+
+      if (toHebrew) {
+        cancelAutoPhonemize();
+      } else {
+        scheduleAutoPhonemize(input.value);
+      }
     }
 
+    useDictionaryOverrides.checked = localStorage.getItem("useDictionaryOverrides") === "true" || DEFAULT_USE_DICTIONARY_OVERRIDES;
     refreshDictionaryViews();
     phonikudServerInput.value = localStorage.getItem("phonikudServerUrl") || DEFAULT_PHONIKUD_SERVER;
     phonemizeBackendSelect.value = localStorage.getItem("phonemizeBackend") || DEFAULT_PHONEMIZE_BACKEND;
@@ -2368,12 +2448,19 @@ eretz yisrael=ארץ ישראל`;
     finalAAsHe.addEventListener("change", convert);
     showAyinAlef.addEventListener("change", convert);
     qForQof.addEventListener("change", convert);
+    useDictionaryOverrides.addEventListener("change", () => {
+      localStorage.setItem("useDictionaryOverrides", String(useDictionaryOverrides.checked));
+      refreshDictionaryViews();
+      convert();
+    });
     loadCsvButton.addEventListener("click", loadCsvDictionary);
     phonikudServerInput.addEventListener("change", () => {
       localStorage.setItem("phonikudServerUrl", normalizeServerUrl(phonikudServerInput.value));
+      if (directionSelect.value === "hebrew-to-latin") convert();
     });
     phonemizeBackendSelect.addEventListener("change", () => {
       localStorage.setItem("phonemizeBackend", phonemizeBackendSelect.value);
+      if (directionSelect.value === "hebrew-to-latin") convert();
     });
     phonemizeButton.addEventListener("click", phonemizeCurrentHebrew);
     copyPhonemesButton.addEventListener("click", async () => {
