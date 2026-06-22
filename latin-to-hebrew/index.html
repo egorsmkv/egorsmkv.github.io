@@ -132,7 +132,7 @@
             </label>
           </div>
 
-          <div class="mt-5 grid gap-3 sm:grid-cols-[1fr_auto]">
+          <div class="mt-5 grid gap-3 sm:grid-cols-[1fr_0.55fr_auto]">
             <label class="block">
               <span class="mb-2 block text-sm font-semibold text-slate-200">Phonikud server</span>
               <input
@@ -142,6 +142,17 @@
                 class="w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none placeholder:text-slate-500 focus:border-cyan-300/60 focus:ring-4 focus:ring-cyan-300/10"
                 placeholder="http://localhost:7860"
               />
+            </label>
+
+            <label class="block">
+              <span class="mb-2 block text-sm font-semibold text-slate-200">Backend</span>
+              <select
+                id="phonemizeBackendSelect"
+                class="w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm font-semibold text-slate-100 outline-none focus:border-cyan-300/60 focus:ring-4 focus:ring-cyan-300/10"
+              >
+                <option value="renikud">Renikud</option>
+                <option value="phonikud">Phonikud</option>
+              </select>
             </label>
 
             <button
@@ -305,6 +316,7 @@
     const showAyinAlef = document.getElementById("showAyinAlef");
     const qForQof = document.getElementById("qForQof");
     const phonikudServerInput = document.getElementById("phonikudServerInput");
+    const phonemizeBackendSelect = document.getElementById("phonemizeBackendSelect");
     const phonemizeButton = document.getElementById("phonemizeButton");
     const phonemizePanel = document.getElementById("phonemizePanel");
     const phonemizeStatus = document.getElementById("phonemizeStatus");
@@ -1304,6 +1316,7 @@ eretz yisrael=ארץ ישראל`;
 
     const CSV_DICTIONARY_URL = "https://raw.githubusercontent.com/morrisalp/taatiknet/main/data/he_transliterations.csv";
     const DEFAULT_PHONIKUD_SERVER = "http://localhost:7860";
+    const DEFAULT_PHONEMIZE_BACKEND = "renikud";
 
     const phraseDictionary = new Map(parseDictionarySource(PHRASE_DICTIONARY_SOURCE));
     let dictionary = buildDictionary(5000);
@@ -1766,9 +1779,11 @@ eretz yisrael=ארץ ישראל`;
 
     async function phonemizeCurrentHebrew() {
       const serverUrl = normalizeServerUrl(phonikudServerInput.value);
+      const backend = phonemizeBackendSelect.value === "phonikud" ? "phonikud" : "renikud";
       const hebrewText = currentHebrewText();
 
       localStorage.setItem("phonikudServerUrl", serverUrl);
+      localStorage.setItem("phonemizeBackend", backend);
       phonikudServerInput.value = serverUrl;
 
       if (!hebrewText) {
@@ -1793,6 +1808,7 @@ eretz yisrael=ארץ ישראל`;
         const body = new FormData();
         body.set("mode", /[\u0591-\u05C7]/u.test(hebrewText) ? "diacritics" : "text");
         body.set("text", hebrewText);
+        body.set("backend", backend);
 
         const response = await fetch(`${serverUrl}/generate`, {
           method: "POST",
@@ -1815,7 +1831,7 @@ eretz yisrael=ארץ ישראל`;
         copyLatinizedButton.classList.toggle("hidden", !latinized);
         copyRussianButton.classList.toggle("hidden", !russianized);
         copyUkrainianCyrillicButton.classList.toggle("hidden", !ukrainianized);
-        setPhonemizeStatus("Phonemized.");
+        setPhonemizeStatus(`Phonemized with ${result.backend || backend}.`);
       } catch (error) {
         setPhonemizeStatus(`Phonemization failed: ${error.message}`);
       } finally {
@@ -2342,6 +2358,7 @@ eretz yisrael=ארץ ישראל`;
 
     refreshDictionaryViews();
     phonikudServerInput.value = localStorage.getItem("phonikudServerUrl") || DEFAULT_PHONIKUD_SERVER;
+    phonemizeBackendSelect.value = localStorage.getItem("phonemizeBackend") || DEFAULT_PHONEMIZE_BACKEND;
 
     input.addEventListener("input", convert);
     directionSelect.addEventListener("change", () => {
@@ -2355,6 +2372,9 @@ eretz yisrael=ארץ ישראל`;
     loadCsvButton.addEventListener("click", loadCsvDictionary);
     phonikudServerInput.addEventListener("change", () => {
       localStorage.setItem("phonikudServerUrl", normalizeServerUrl(phonikudServerInput.value));
+    });
+    phonemizeBackendSelect.addEventListener("change", () => {
+      localStorage.setItem("phonemizeBackend", phonemizeBackendSelect.value);
     });
     phonemizeButton.addEventListener("click", phonemizeCurrentHebrew);
     copyPhonemesButton.addEventListener("click", async () => {

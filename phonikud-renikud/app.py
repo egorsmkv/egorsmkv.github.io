@@ -17,8 +17,6 @@ phonikud = Phonikud("phonikud-1.0.int8.onnx")
 
 renikud = G2P("renikud.onnx")
 
-USE_RENIKUD = True
-
 
 @app.after_request
 def add_cors_headers(response):
@@ -33,8 +31,10 @@ def generate():
     mode = request.form["mode"]
     text = request.form.get("text", "")
     phonemes = request.form.get("phonemes", "")
+    backend = request.form.get("backend", "renikud")
+    use_renikud = backend != "phonikud"
 
-    if USE_RENIKUD:
+    if use_renikud:
         if mode == "text":
             with_diacritics = phonikud.add_diacritics(text)
             phonemes = renikud.phonemize(text)
@@ -55,7 +55,7 @@ def generate():
 
     return jsonify(
         {
-            "backend": "renikud" if USE_RENIKUD else "phonikud",
+            "backend": "renikud" if use_renikud else "phonikud",
             "diacritics": with_diacritics,
             "phonemes": phonemes,
         }
