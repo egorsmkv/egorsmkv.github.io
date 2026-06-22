@@ -1742,7 +1742,7 @@ eretz yisrael=ארץ ישראל`;
         if (base === "ו" && (hasRawDagesh || vowel === "u")) return "u";
         if (base === "ו" && vowel === "o") return "o";
         if (base === "ה" && index === clusters.length - 1 && !hasDagesh) {
-          if (vowel) return `${vowel}h`;
+          if (vowel) return index === 0 ? consonantFor(cluster) + vowel : `${vowel}h`;
           return hasAnyMark(previousCluster, [PATAH, QAMATS]) ? "h" : "";
         }
 
@@ -1752,7 +1752,8 @@ eretz yisrael=ארץ ישראל`;
       function hasFurtivePatah(index, clusters) {
         const cluster = clusters[index] || "";
         const base = baseOf(cluster);
-        return index === clusters.length - 1 && cluster.includes(PATAH) && /[חעה]/u.test(base);
+        const supportsFurtivePatah = /[חע]/u.test(base) || (base === "ה" && hasMark(cluster, DAGESH));
+        return index === clusters.length - 1 && cluster.includes(PATAH) && supportsFurtivePatah;
       }
 
       function shouldUseQamatsQatan(index, clusters) {
