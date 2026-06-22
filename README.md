@@ -1,4 +1,5 @@
 - Loguru Viewer: https://egorsmkv.github.io/loguru-viewer/
 - MCP Inspector: https://egorsmkv.github.io/mcp-inspector/
 - ROR Map: https://egorsmkv.github.io/ror-map/
+- Latin to Hebrew: https://egorsmkv.github.io/latin-to-hebrew/
 - Region Viewer for https://huggingface.co/datasets/UkrainianCatholicUniversity/rukopys: https://egorsmkv.github.io/rukopys-viewer/
