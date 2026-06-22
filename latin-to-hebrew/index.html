@@ -1580,7 +1580,6 @@ eretz yisrael=ארץ ישראל`;
 
         for (let i = 0; i < chars.length; i++) {
           const ch = chars[i];
-          const prev = chars[i - 1] || "";
           const next = chars[i + 1] || "";
 
           if (ch === "s" && next === "h") {
@@ -1613,7 +1612,7 @@ eretz yisrael=ארץ ישראל`;
             d: "д",
             e: "е",
             f: "ф",
-            g: "г",
+            g: "ґ",
             h: "х",
             i: "и",
             k: "к",
@@ -1632,7 +1631,7 @@ eretz yisrael=ארץ ישראל`;
             x: "х",
             y: "и",
             z: "з",
-            "ɡ": "г",
+            "ɡ": "ґ",
             "ʁ": "р",
             "ɾ": "р",
             "χ": "х",
@@ -1653,7 +1652,7 @@ eretz yisrael=ארץ ישראל`;
       function sentenceCase(text) {
         let shouldCapitalize = true;
 
-        return text.replace(/([А-Яа-яЁё])|([.!?]\s*)/g, (match, letter, boundary) => {
+        return text.replace(/([A-Za-zА-Яа-яЁё])|([.!?]\s*)/g, (match, letter, boundary) => {
           if (boundary) {
             shouldCapitalize = true;
             return boundary;
