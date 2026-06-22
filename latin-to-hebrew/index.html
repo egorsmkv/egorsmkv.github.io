@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Latin to Hebrew Converter</title>
+  <title>Hebrew Transliteration Converter</title>
   <script>
     (() => {
-      const savedTheme = localStorage.getItem("latinToHebrewTheme");
+      const savedTheme = localStorage.getItem("hebrewTranslitTheme");
       const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
       document.documentElement.dataset.theme = savedTheme || (prefersDark ? "dark" : "light");
     })();
@@ -47,7 +47,7 @@
     html[data-theme="light"] .shadow-black\/30 { --tw-shadow-color: rgba(15, 23, 42, 0.12) !important; }
     html[data-theme="light"] .shadow-cyan-950\/40 { --tw-shadow-color: rgba(8, 145, 178, 0.18) !important; }
 
-    html[data-theme="light"] #hebrewOutput { box-shadow: inset 0 1px 10px rgba(15, 23, 42, 0.06); }
+    html[data-theme="light"] #translitOutput { box-shadow: inset 0 1px 10px rgba(15, 23, 42, 0.06); }
     html[data-theme="light"] #clearButton:hover,
     html[data-theme="light"] .sample:hover,
     html[data-theme="light"] #themeToggle:hover { background-color: rgba(241, 245, 249, 0.98) !important; }
@@ -76,17 +76,28 @@
           </div>
 
           <h1 class="text-3xl font-bold tracking-tight text-white sm:text-4xl">
-            Latin → Hebrew Converter
+            Hebrew Transliteration Converter
           </h1>
 
-          <p class="mt-4 max-w-2xl text-sm leading-6 text-slate-300 sm:text-base">
+          <p id="helpText" class="mt-4 max-w-2xl text-sm leading-6 text-slate-300 sm:text-base">
             Type a Latinized Hebrew phrase such as <span class="font-semibold text-white">shalom haverim</span>,
             <span class="font-semibold text-white">tel aviv</span>, or <span class="font-semibold text-white">melekh</span>.
             The output updates automatically and can be copied.
           </p>
 
+          <div class="mt-6 grid gap-3 sm:grid-cols-[0.8fr_1.2fr]">
+            <label for="directionSelect" class="flex items-center text-sm font-semibold text-slate-200">Direction</label>
+            <select
+              id="directionSelect"
+              class="rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm font-semibold text-slate-100 outline-none focus:border-cyan-300/60 focus:ring-4 focus:ring-cyan-300/10"
+            >
+              <option value="latin-to-hebrew">Latin → Hebrew</option>
+              <option value="hebrew-to-latin">Hebrew → Latin</option>
+            </select>
+          </div>
+
           <div class="mt-8 space-y-4">
-            <label for="latinInput" class="block text-sm font-semibold text-slate-200">Latin phrase</label>
+            <label id="inputLabel" for="latinInput" class="block text-sm font-semibold text-slate-200">Latin phrase</label>
             <textarea
               id="latinInput"
               rows="8"
@@ -96,7 +107,7 @@
             ></textarea>
           </div>
 
-          <div class="mt-5 grid gap-3 sm:grid-cols-2">
+          <div id="latinOptions" class="mt-5 grid gap-3 sm:grid-cols-2">
             <label class="flex cursor-pointer items-center justify-between rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm text-slate-200">
               <span>Use ו for Latin “v”</span>
               <input id="vAsVav" type="checkbox" class="h-5 w-5 accent-cyan-300" />
@@ -108,13 +119,25 @@
             </label>
           </div>
 
+          <div id="hebrewOptions" class="mt-5 hidden grid gap-3 sm:grid-cols-2">
+            <label class="flex cursor-pointer items-center justify-between rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm text-slate-200">
+              <span>Show א/ע apostrophes</span>
+              <input id="showAyinAlef" type="checkbox" class="h-5 w-5 accent-cyan-300" />
+            </label>
+
+            <label class="flex cursor-pointer items-center justify-between rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm text-slate-200">
+              <span>Use q for ק</span>
+              <input id="qForQof" type="checkbox" checked class="h-5 w-5 accent-cyan-300" />
+            </label>
+          </div>
+
           <div class="mt-6 flex flex-wrap gap-3">
             <button
               id="copyButton"
               type="button"
               class="rounded-2xl bg-cyan-300 px-5 py-3 text-sm font-bold text-slate-950 shadow-lg shadow-cyan-950/40 transition hover:bg-cyan-200 active:scale-[0.98]"
             >
-              Copy Hebrew
+              Copy output
             </button>
 
             <button
@@ -131,7 +154,7 @@
 
         <aside class="border-t border-white/10 bg-slate-900/60 p-6 sm:p-8 lg:border-l lg:border-t-0 lg:p-10">
           <div class="flex items-center justify-between gap-4">
-            <h2 class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-400">Hebrew output</h2>
+            <h2 id="outputLabel" class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-400">Hebrew output</h2>
             <div class="flex flex-wrap items-center justify-end gap-2">
               <span id="dictionaryCount" class="rounded-full bg-white/10 px-3 py-1 text-xs text-slate-300">0 overrides</span>
               <span id="charCount" class="rounded-full bg-white/10 px-3 py-1 text-xs text-slate-300">0 chars</span>
@@ -139,25 +162,25 @@
           </div>
 
           <div
-            id="hebrewOutput"
+            id="translitOutput"
             dir="rtl"
             class="mt-5 min-h-72 rounded-3xl border border-white/10 bg-slate-950/80 p-6 text-right text-4xl font-semibold leading-relaxed text-white shadow-inner outline-none"
           ></div>
 
           <div class="mt-6 rounded-2xl border border-amber-300/20 bg-amber-300/10 p-4 text-sm leading-6 text-amber-50">
             <strong class="font-semibold">Note:</strong>
-            This uses a 5,000-entry override dictionary plus fallback rules to create plausible unvocalized Hebrew. Latin → Hebrew is ambiguous, so words like
+            This uses a 5,000-entry override dictionary plus fallback rules in both directions. Transliteration is ambiguous: unvocalized Hebrew usually omits vowels, and Latin spellings like
             <span class="font-semibold">kh</span>, <span class="font-semibold">t</span>, and
-            <span class="font-semibold">v</span> may have more than one correct Hebrew spelling.
+            <span class="font-semibold">v</span> can map to more than one Hebrew spelling.
           </div>
 
           <div class="mt-5 grid grid-cols-2 gap-2 text-sm text-slate-300 sm:grid-cols-3">
-            <button class="sample rounded-xl bg-white/10 px-3 py-2 text-left hover:bg-white/15" data-value="shalom">shalom</button>
-            <button class="sample rounded-xl bg-white/10 px-3 py-2 text-left hover:bg-white/15" data-value="tel aviv">tel aviv</button>
-            <button class="sample rounded-xl bg-white/10 px-3 py-2 text-left hover:bg-white/15" data-value="melekh">melekh</button>
-            <button class="sample rounded-xl bg-white/10 px-3 py-2 text-left hover:bg-white/15" data-value="torah">torah</button>
-            <button class="sample rounded-xl bg-white/10 px-3 py-2 text-left hover:bg-white/15" data-value="khaverim">khaverim</button>
-            <button class="sample rounded-xl bg-white/10 px-3 py-2 text-left hover:bg-white/15" data-value="ani ohev ivrit">ani ohev ivrit</button>
+            <button class="sample rounded-xl bg-white/10 px-3 py-2 text-left hover:bg-white/15" data-latin="shalom" data-hebrew="שלום">shalom</button>
+            <button class="sample rounded-xl bg-white/10 px-3 py-2 text-left hover:bg-white/15" data-latin="tel aviv" data-hebrew="תל אביב">tel aviv</button>
+            <button class="sample rounded-xl bg-white/10 px-3 py-2 text-left hover:bg-white/15" data-latin="melekh" data-hebrew="מלך">melekh</button>
+            <button class="sample rounded-xl bg-white/10 px-3 py-2 text-left hover:bg-white/15" data-latin="torah" data-hebrew="תורה">torah</button>
+            <button class="sample rounded-xl bg-white/10 px-3 py-2 text-left hover:bg-white/15" data-latin="khaverim" data-hebrew="חברים">khaverim</button>
+            <button class="sample rounded-xl bg-white/10 px-3 py-2 text-left hover:bg-white/15" data-latin="ani ohev ivrit" data-hebrew="אני אוהב עברית">ani ohev ivrit</button>
           </div>
         </aside>
       </div>
@@ -166,14 +189,22 @@
 
   <script>
     const input = document.getElementById("latinInput");
-    const output = document.getElementById("hebrewOutput");
+    const output = document.getElementById("translitOutput");
     const copyButton = document.getElementById("copyButton");
     const clearButton = document.getElementById("clearButton");
     const copyStatus = document.getElementById("copyStatus");
     const charCount = document.getElementById("charCount");
     const dictionaryCount = document.getElementById("dictionaryCount");
+    const directionSelect = document.getElementById("directionSelect");
+    const inputLabel = document.getElementById("inputLabel");
+    const outputLabel = document.getElementById("outputLabel");
+    const helpText = document.getElementById("helpText");
+    const latinOptions = document.getElementById("latinOptions");
+    const hebrewOptions = document.getElementById("hebrewOptions");
     const vAsVav = document.getElementById("vAsVav");
     const finalAAsHe = document.getElementById("finalAAsHe");
+    const showAyinAlef = document.getElementById("showAyinAlef");
+    const qForQof = document.getElementById("qForQof");
     const themeToggle = document.getElementById("themeToggle");
     const themeIcon = document.getElementById("themeIcon");
     const themeLabel = document.getElementById("themeLabel");
@@ -181,7 +212,7 @@
     function setTheme(theme) {
       const normalizedTheme = theme === "dark" ? "dark" : "light";
       document.documentElement.dataset.theme = normalizedTheme;
-      localStorage.setItem("latinToHebrewTheme", normalizedTheme);
+      localStorage.setItem("hebrewTranslitTheme", normalizedTheme);
 
       const isDark = normalizedTheme === "dark";
       themeToggle.setAttribute("aria-pressed", String(isDark));
@@ -539,15 +570,15 @@ mazleg=מזלג
 sakin=סכין
 kapit=כפית
 kaf=כף
+haver=חבר
 chaver=חבר
 khaver=חבר
+havera=חברה
 chavera=חברה
 khavera=חברה
+haverim=חברים
 chaverim=חברים
 khaverim=חברים
-haver=חבר
-havera=חברה
-haverim=חברים
 mishpacha=משפחה
 mishpakha=משפחה
 aba=אבא
@@ -1141,6 +1172,31 @@ eretz yisrael=ארץ ישראל`;
     const phraseDictionary = new Map(parseDictionarySource(PHRASE_DICTIONARY_SOURCE));
     const dictionary = buildDictionary(5000);
 
+    function normalizeHebrewKey(value) {
+      return value
+        .normalize("NFC")
+        .replace(/[\u0591-\u05C7]/g, "")
+        .replace(/[׳’ʼʾ']/g, "׳")
+        .replace(/[״"]/g, '"')
+        .trim();
+    }
+
+    function buildReverseDictionary() {
+      const map = new Map();
+
+      function add(hebrew, latin) {
+        const key = normalizeHebrewKey(hebrew);
+        if (!key || !latin || map.has(key)) return;
+        map.set(key, latin);
+      }
+
+      for (const [latin, hebrew] of phraseDictionary.entries()) add(hebrew, latin);
+      for (const [latin, hebrew] of dictionary.entries()) add(hebrew, latin);
+
+      return map;
+    }
+
+    const reverseDictionary = buildReverseDictionary();
 
     function escapeRegExp(value) {
       return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -1157,6 +1213,22 @@ eretz yisrael=ארץ ישראל`;
       return phrasePatterns.reduce((result, { pattern, hebrew }) => {
         return result.replace(pattern, (match, before, after) => `${before}${hebrew}${after}`);
       }, text);
+    }
+
+    const reversePatterns = Array.from(reverseDictionary.entries())
+      .filter(([hebrew]) => hebrew.length > 1)
+      .sort((a, b) => b[0].length - a[0].length)
+      .map(([hebrew, latin]) => ({
+        pattern: new RegExp(`(^|[^\u0590-\u05FF])${escapeRegExp(hebrew).replace(/\s+/g, "\\s+")}($|[^\u0590-\u05FF])`, "gu"),
+        latin
+      }));
+
+    function applyReverseDictionary(text) {
+      const normalized = normalizeHebrewKey(text);
+
+      return reversePatterns.reduce((result, { pattern, latin }) => {
+        return result.replace(pattern, (match, before, after) => `${before}${latin}${after}`);
+      }, normalized);
     }
 
     function latinToHebrew(text, options = {}) {
@@ -1323,22 +1395,198 @@ eretz yisrael=ארץ ישראל`;
         .join("") || "";
     }
 
-    function convert() {
-      const hebrew = latinToHebrew(input.value, {
-        vAs: vAsVav.checked ? "vav" : "bet",
-        finalAAsHe: finalAAsHe.checked
-      });
+    function hebrewToLatin(text, options = {}) {
+      const settings = {
+        showAyinAlef: Boolean(options.showAyinAlef),
+        qForQof: options.qForQof !== false
+      };
 
-      output.textContent = hebrew;
-      charCount.textContent = `${Array.from(hebrew).length} chars`;
+      const HEBREW_TOKEN = /[\u0590-\u05FF]+/u;
+      const NIQQUD = /[\u0591-\u05C7]/u;
+      const DAGESH = "\u05BC";
+      const SHIN_DOT = "\u05C1";
+      const SIN_DOT = "\u05C2";
+
+      function splitClusters(word) {
+        const chars = Array.from(word.normalize("NFD"));
+        const clusters = [];
+        let current = "";
+
+        for (const ch of chars) {
+          if (NIQQUD.test(ch)) {
+            current += ch;
+          } else {
+            if (current) clusters.push(current);
+            current = ch;
+          }
+        }
+
+        if (current) clusters.push(current);
+        return clusters;
+      }
+
+      function baseOf(cluster) {
+        return Array.from(cluster)[0] || "";
+      }
+
+      function hasMark(cluster, mark) {
+        return cluster.includes(mark);
+      }
+
+      function vowelFor(cluster) {
+        if (cluster.includes("\u05B7") || cluster.includes("\u05B8") || cluster.includes("\u05B2")) return "a";
+        if (cluster.includes("\u05B6") || cluster.includes("\u05B5") || cluster.includes("\u05B1")) return "e";
+        if (cluster.includes("\u05B4")) return "i";
+        if (cluster.includes("\u05B9") || cluster.includes("\u05BA") || cluster.includes("\u05B3")) return "o";
+        if (cluster.includes("\u05BB")) return "u";
+        return "";
+      }
+
+      function mapPlainCluster(cluster) {
+        const base = baseOf(cluster);
+        const hasDagesh = hasMark(cluster, DAGESH);
+        const hasSinDot = hasMark(cluster, SIN_DOT);
+        const vowel = vowelFor(cluster);
+
+        if (base === "ו" && (hasDagesh || vowel === "u")) return "u";
+        if (base === "ו" && vowel === "o") return "o";
+
+        const consonants = {
+          "א": settings.showAyinAlef ? "'" : "",
+          "ב": hasDagesh ? "b" : "v",
+          "ג": "g",
+          "ד": "d",
+          "ה": "h",
+          "ו": "v",
+          "ז": "z",
+          "ח": "kh",
+          "ט": "t",
+          "י": "y",
+          "כ": hasDagesh ? "k" : "kh",
+          "ך": hasDagesh ? "k" : "kh",
+          "ל": "l",
+          "מ": "m",
+          "ם": "m",
+          "נ": "n",
+          "ן": "n",
+          "ס": "s",
+          "ע": settings.showAyinAlef ? "`" : "",
+          "פ": hasDagesh ? "p" : "f",
+          "ף": hasDagesh ? "p" : "f",
+          "צ": "ts",
+          "ץ": "ts",
+          "ק": settings.qForQof ? "q" : "k",
+          "ר": "r",
+          "ש": hasSinDot ? "s" : "sh",
+          "ת": "t"
+        };
+
+        const consonant = consonants[base] ?? base;
+        return consonant + vowel;
+      }
+
+      function mapGeresh(base) {
+        const map = {
+          "ג": "j",
+          "ז": "zh",
+          "צ": "ch",
+          "ץ": "ch",
+          "ש": "sh",
+          "ת": "th",
+          "ד": "dh"
+        };
+        return map[base] || mapPlainCluster(base);
+      }
+
+      function transliterateHebrewWord(rawWord) {
+        const normalizedWord = normalizeHebrewKey(rawWord);
+        if (reverseDictionary.has(normalizedWord)) {
+          return reverseDictionary.get(normalizedWord);
+        }
+
+        const clusters = splitClusters(rawWord);
+        let out = "";
+
+        for (let i = 0; i < clusters.length; i++) {
+          const cluster = clusters[i];
+          const base = baseOf(cluster);
+          const nextBase = baseOf(clusters[i + 1] || "");
+
+          if (base === "׳" || base === "'") continue;
+
+          if (nextBase === "׳" || nextBase === "'") {
+            out += mapGeresh(base);
+            i++;
+            continue;
+          }
+
+          out += mapPlainCluster(cluster);
+        }
+
+        return out;
+      }
+
+      const dictionaryExpandedText = applyReverseDictionary(text);
+
+      return dictionaryExpandedText
+        .match(/[\u0590-\u05FF]+|[^\u0590-\u05FF]+/gu)
+        ?.map(part => HEBREW_TOKEN.test(part) ? transliterateHebrewWord(part) : part)
+        .join("") || "";
+    }
+
+    function updateModeUI() {
+      const toHebrew = directionSelect.value === "latin-to-hebrew";
+
+      latinOptions.classList.toggle("hidden", !toHebrew);
+      hebrewOptions.classList.toggle("hidden", toHebrew);
+      output.classList.toggle("text-right", toHebrew);
+      output.classList.toggle("text-left", !toHebrew);
+      output.setAttribute("dir", toHebrew ? "rtl" : "ltr");
+      input.setAttribute("dir", toHebrew ? "ltr" : "rtl");
+
+      inputLabel.textContent = toHebrew ? "Latin phrase" : "Hebrew phrase";
+      outputLabel.textContent = toHebrew ? "Hebrew output" : "Latin output";
+      copyButton.textContent = toHebrew ? "Copy Hebrew" : "Copy Latin";
+      input.placeholder = toHebrew
+        ? "Example: shalom haverim, ani ohev ivrit"
+        : "דוגמה: שלום חברים, אני אוהב עברית";
+      helpText.innerHTML = toHebrew
+        ? 'Type a Latinized Hebrew phrase such as <span class="font-semibold text-white">shalom haverim</span>, <span class="font-semibold text-white">tel aviv</span>, or <span class="font-semibold text-white">melekh</span>. The output updates automatically and can be copied.'
+        : 'Type Hebrew text such as <span class="font-semibold text-white">שלום חברים</span>, <span class="font-semibold text-white">תל אביב</span>, or <span class="font-semibold text-white">מלך</span>. The output updates automatically and can be copied.';
+
+      document.querySelectorAll(".sample").forEach(button => {
+        button.textContent = toHebrew ? button.dataset.latin : button.dataset.hebrew;
+      });
+    }
+
+    function convert() {
+      const toHebrew = directionSelect.value === "latin-to-hebrew";
+      const converted = toHebrew
+        ? latinToHebrew(input.value, {
+            vAs: vAsVav.checked ? "vav" : "bet",
+            finalAAsHe: finalAAsHe.checked
+          })
+        : hebrewToLatin(input.value, {
+            showAyinAlef: showAyinAlef.checked,
+            qForQof: qForQof.checked
+          });
+
+      output.textContent = converted;
+      charCount.textContent = `${Array.from(converted).length} chars`;
       copyStatus.textContent = "";
     }
 
-    dictionaryCount.textContent = `${dictionary.size.toLocaleString()} overrides`;
+    dictionaryCount.textContent = `${dictionary.size.toLocaleString()} Latin→Hebrew • ${reverseDictionary.size.toLocaleString()} Hebrew→Latin`;
 
     input.addEventListener("input", convert);
+    directionSelect.addEventListener("change", () => {
+      updateModeUI();
+      convert();
+    });
     vAsVav.addEventListener("change", convert);
     finalAAsHe.addEventListener("change", convert);
+    showAyinAlef.addEventListener("change", convert);
+    qForQof.addEventListener("change", convert);
 
     copyButton.addEventListener("click", async () => {
       const text = output.textContent.trim();
@@ -1364,13 +1612,15 @@ eretz yisrael=ארץ ישראל`;
 
     document.querySelectorAll(".sample").forEach(button => {
       button.addEventListener("click", () => {
-        input.value = button.dataset.value;
+        const toHebrew = directionSelect.value === "latin-to-hebrew";
+        input.value = toHebrew ? button.dataset.latin : button.dataset.hebrew;
         convert();
         input.focus();
       });
     });
 
     input.value = "shalom haverim, ani ohev ivrit";
+    updateModeUI();
     convert();
   </script>
 </body>
