@@ -1421,6 +1421,17 @@ eretz yisrael=ארץ ישראל`;
       const HOLAM_HASER = "\u05BA";
       const QUBUTS = "\u05BB";
       const QAMATS_QATAN = "\u05C7";
+      const QAMATS_QATAN_OVERRIDES = new Map([
+        ["כָּל", "kol"],
+        ["כָל", "kol"],
+        ["חָכְמָה", "khokhmah"],
+        ["חָכְמַה", "khokhmah"],
+        ["קָרְבָּן", "korban"],
+        ["קָרְבַּן", "korban"],
+        ["צָהֳרַיִם", "tsohorayim"],
+        ["אָזְנַיִם", "oznayim"],
+        ["אׇזְנַיִם", "oznayim"]
+      ]);
 
       function splitClusters(word) {
         const chars = Array.from(word.normalize("NFD"));
@@ -1448,6 +1459,19 @@ eretz yisrael=ארץ ישראל`;
         return cluster.includes(mark);
       }
 
+      function hasAnyMark(cluster, marks) {
+        return marks.some(mark => cluster.includes(mark));
+      }
+
+      function hasConsonantDagesh(cluster) {
+        return hasMark(cluster, DAGESH) && /[בכפךףה]/u.test(baseOf(cluster));
+      }
+
+      function nextClusterIsPlainYod(index, clusters) {
+        const nextCluster = clusters[index + 1] || "";
+        return baseOf(nextCluster) === "י" && !hasVowelMark(nextCluster);
+      }
+
       function isVocalSheva(index, clusters) {
         const cluster = clusters[index] || "";
         if (!cluster.includes(SHEVA)) return false;
@@ -1460,6 +1484,8 @@ eretz yisrael=ארץ ישראל`;
         if (cluster.includes(HATAF_QAMATS)) return "o";
         if (cluster.includes(SHEVA)) return isVocalSheva(index, clusters) ? "e" : "";
         if (cluster.includes(PATAH) || cluster.includes(QAMATS)) return "a";
+        if (cluster.includes(TSERE) && nextClusterIsPlainYod(index, clusters)) return "ei";
+        if (cluster.includes(SEGOL) && nextClusterIsPlainYod(index, clusters)) return "ei";
         if (cluster.includes(SEGOL) || cluster.includes(TSERE)) return "e";
         if (cluster.includes(HIRIQ)) return "i";
         if (cluster.includes(HOLAM) || cluster.includes(HOLAM_HASER) || cluster.includes(QAMATS_QATAN)) return "o";
@@ -1473,7 +1499,7 @@ eretz yisrael=ארץ ישראל`;
 
       function consonantFor(cluster) {
         const base = baseOf(cluster);
-        const hasDagesh = hasMark(cluster, DAGESH);
+        const hasDagesh = hasConsonantDagesh(cluster);
         const hasSinDot = hasMark(cluster, SIN_DOT);
 
         const consonants = {
@@ -1509,13 +1535,31 @@ eretz yisrael=ארץ ישראל`;
         return consonants[base] ?? base;
       }
 
+      function mapsAsVowelLetter(index, clusters) {
+        const cluster = clusters[index] || "";
+        const previousCluster = clusters[index - 1] || "";
+        const base = baseOf(cluster);
+
+        if (hasVowelMark(cluster)) return false;
+        if (base === "י" && hasAnyMark(previousCluster, [HIRIQ, TSERE, SEGOL])) return true;
+        if (base === "ו" && hasAnyMark(previousCluster, [HOLAM, HOLAM_HASER, QUBUTS])) return true;
+
+        return false;
+      }
+
       function mapPlainCluster(cluster, index = 0, clusters = [cluster]) {
         const base = baseOf(cluster);
-        const hasDagesh = hasMark(cluster, DAGESH);
+        const previousCluster = clusters[index - 1] || "";
+        const hasDagesh = hasConsonantDagesh(cluster);
+        const hasRawDagesh = hasMark(cluster, DAGESH);
         const vowel = vowelFor(cluster, index, clusters);
 
-        if (base === "ו" && (hasDagesh || vowel === "u")) return "u";
+        if (base === "ו" && (hasRawDagesh || vowel === "u")) return "u";
         if (base === "ו" && vowel === "o") return "o";
+        if (base === "ה" && index === clusters.length - 1 && !hasDagesh) {
+          if (vowel) return `${vowel}h`;
+          return hasAnyMark(previousCluster, [PATAH, QAMATS]) ? "h" : "";
+        }
 
         return consonantFor(cluster) + vowel;
       }
@@ -1524,6 +1568,17 @@ eretz yisrael=ארץ ישראל`;
         const cluster = clusters[index] || "";
         const base = baseOf(cluster);
         return index === clusters.length - 1 && cluster.includes(PATAH) && /[חעה]/u.test(base);
+      }
+
+      function shouldUseQamatsQatan(index, clusters) {
+        const cluster = clusters[index] || "";
+        if (!cluster.includes(QAMATS)) return false;
+        if (cluster.includes(QAMATS_QATAN)) return true;
+
+        const nextCluster = clusters[index + 1] || "";
+        const followingCluster = clusters[index + 2] || "";
+
+        return nextCluster.includes(SHEVA) && Boolean(followingCluster);
       }
 
       function mapGeresh(base) {
@@ -1542,6 +1597,12 @@ eretz yisrael=ארץ ישראל`;
       function transliterateHebrewWord(rawWord) {
         const normalizedWord = normalizeHebrewKey(rawWord);
         const hasVocalization = NIQQUD.test(rawWord);
+        const overrideKey = rawWord.normalize("NFD").replace(/[\u0591-\u05AF\u05BD\u05BF\u05C0\u05C4-\u05C5]/g, "").normalize("NFC");
+
+        if (QAMATS_QATAN_OVERRIDES.has(overrideKey)) {
+          return QAMATS_QATAN_OVERRIDES.get(overrideKey);
+        }
+
         if (!hasVocalization && reverseDictionary.has(normalizedWord)) {
           return reverseDictionary.get(normalizedWord);
         }
@@ -1553,7 +1614,6 @@ eretz yisrael=ארץ ישראל`;
           const cluster = clusters[i];
           const base = baseOf(cluster);
           const nextBase = baseOf(clusters[i + 1] || "");
-          const previousCluster = clusters[i - 1] || "";
 
           if (base === "׳" || base === "'") continue;
 
@@ -1563,7 +1623,7 @@ eretz yisrael=ארץ ישראל`;
             continue;
           }
 
-          if (base === "י" && !hasVowelMark(cluster) && hasMark(previousCluster, HIRIQ)) {
+          if (mapsAsVowelLetter(i, clusters)) {
             continue;
           }
 
@@ -1572,10 +1632,18 @@ eretz yisrael=ארץ ישראל`;
             continue;
           }
 
+          if (shouldUseQamatsQatan(i, clusters)) {
+            out += consonantFor(cluster) + "o";
+            continue;
+          }
+
           out += mapPlainCluster(cluster, i, clusters);
         }
 
-        return out;
+        return out
+          .replace(/iy/g, "i")
+          .replace(/ey/g, "ei")
+          .replace(/ow/g, "o");
       }
 
       const dictionaryExpandedText = NIQQUD.test(text) ? text : applyReverseDictionary(text);
