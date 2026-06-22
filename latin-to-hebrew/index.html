@@ -49,6 +49,7 @@
 
     html[data-theme="light"] #translitOutput { box-shadow: inset 0 1px 10px rgba(15, 23, 42, 0.06); }
     html[data-theme="light"] #clearButton:hover,
+    html[data-theme="light"] #loadCsvButton:hover,
     html[data-theme="light"] .sample:hover,
     html[data-theme="light"] #themeToggle:hover { background-color: rgba(241, 245, 249, 0.98) !important; }
   </style>
@@ -148,7 +149,22 @@
               Clear
             </button>
 
+            <button
+              id="loadCsvButton"
+              type="button"
+              class="rounded-2xl border border-white/10 bg-white/10 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/15 active:scale-[0.98] disabled:cursor-wait disabled:opacity-70"
+            >
+              Load CSV dictionary
+            </button>
+
             <span id="copyStatus" class="inline-flex items-center text-sm text-slate-400" aria-live="polite"></span>
+          </div>
+
+          <div id="csvLoadPanel" class="mt-4 hidden space-y-2" aria-live="polite">
+            <div class="h-2 overflow-hidden rounded-full bg-white/10">
+              <div id="csvProgressBar" class="h-full w-0 rounded-full bg-cyan-300 transition-all duration-200"></div>
+            </div>
+            <p id="csvLoadStatus" class="text-sm text-slate-400"></p>
           </div>
         </div>
 
@@ -194,7 +210,11 @@
     const output = document.getElementById("translitOutput");
     const copyButton = document.getElementById("copyButton");
     const clearButton = document.getElementById("clearButton");
+    const loadCsvButton = document.getElementById("loadCsvButton");
     const copyStatus = document.getElementById("copyStatus");
+    const csvLoadPanel = document.getElementById("csvLoadPanel");
+    const csvProgressBar = document.getElementById("csvProgressBar");
+    const csvLoadStatus = document.getElementById("csvLoadStatus");
     const charCount = document.getElementById("charCount");
     const dictionaryCount = document.getElementById("dictionaryCount");
     const directionSelect = document.getElementById("directionSelect");
@@ -1128,9 +1148,30 @@ eretz yisrael=ארץ ישראל`;
         .filter(([latin, hebrew]) => latin && hebrew);
     }
 
+    function normalizeLatinKey(value) {
+      return value
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .replace(/[’ʼʾ]/g, "'")
+        .replace(/[‘ʿ`]/g, "`")
+        .replace(/ḵ/g, "kh")
+        .replace(/ḥ/g, "kh")
+        .replace(/š/g, "sh")
+        .replace(/ś/g, "s")
+        .replace(/ṣ/g, "ts")
+        .replace(/ṭ/g, "t")
+        .replace(/ḏ/g, "d")
+        .replace(/ṯ/g, "t")
+        .replace(/ʾ/g, "'")
+        .replace(/ʿ/g, "`")
+        .trim();
+    }
+
     function addDictionaryEntry(map, latin, hebrew) {
-      if (!latin || !hebrew || map.has(latin)) return;
-      map.set(latin, hebrew);
+      const key = normalizeLatinKey(latin);
+      if (!key || !hebrew || map.has(key)) return;
+      map.set(key, hebrew);
     }
 
     function addPopularVariants(map, latin, hebrew) {
@@ -1171,8 +1212,12 @@ eretz yisrael=ארץ ישראל`;
       return map;
     }
 
+    const CSV_DICTIONARY_URL = "https://raw.githubusercontent.com/morrisalp/taatiknet/main/data/he_transliterations.csv";
+
     const phraseDictionary = new Map(parseDictionarySource(PHRASE_DICTIONARY_SOURCE));
-    const dictionary = buildDictionary(5000);
+    let dictionary = buildDictionary(5000);
+    let dictionarySourceLabel = "Built-in";
+    let vocalizedReverseDictionary = new Map();
 
     function normalizeHebrewKey(value) {
       return value
@@ -1185,20 +1230,27 @@ eretz yisrael=ארץ ישראל`;
 
     function buildReverseDictionary() {
       const map = new Map();
+      const vocalizedMap = new Map();
 
       function add(hebrew, latin) {
         const key = normalizeHebrewKey(hebrew);
         if (!key || !latin || map.has(key)) return;
         map.set(key, latin);
+
+        const vocalizedKey = hebrew.normalize("NFC").trim();
+        if (/[\u0591-\u05C7]/u.test(vocalizedKey) && !vocalizedMap.has(vocalizedKey)) {
+          vocalizedMap.set(vocalizedKey, latin);
+        }
       }
 
       for (const [latin, hebrew] of phraseDictionary.entries()) add(hebrew, latin);
       for (const [latin, hebrew] of dictionary.entries()) add(hebrew, latin);
 
+      vocalizedReverseDictionary = vocalizedMap;
       return map;
     }
 
-    const reverseDictionary = buildReverseDictionary();
+    let reverseDictionary = buildReverseDictionary();
 
     function escapeRegExp(value) {
       return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -1217,13 +1269,17 @@ eretz yisrael=ארץ ישראל`;
       }, text);
     }
 
-    const reversePatterns = Array.from(reverseDictionary.entries())
-      .filter(([hebrew]) => hebrew.length > 1)
-      .sort((a, b) => b[0].length - a[0].length)
-      .map(([hebrew, latin]) => ({
-        pattern: new RegExp(`(^|[^\u0590-\u05FF])${escapeRegExp(hebrew).replace(/\s+/g, "\\s+")}($|[^\u0590-\u05FF])`, "gu"),
-        latin
-      }));
+    function buildReversePatterns() {
+      return Array.from(reverseDictionary.entries())
+        .filter(([hebrew]) => hebrew.length > 1)
+        .sort((a, b) => b[0].length - a[0].length)
+        .map(([hebrew, latin]) => ({
+          pattern: new RegExp(`(^|[^\u0590-\u05FF])${escapeRegExp(hebrew).replace(/\s+/g, "\\s+")}($|[^\u0590-\u05FF])`, "gu"),
+          latin
+        }));
+    }
+
+    let reversePatterns = buildReversePatterns();
 
     function applyReverseDictionary(text) {
       const normalized = normalizeHebrewKey(text);
@@ -1231,6 +1287,140 @@ eretz yisrael=ארץ ישראל`;
       return reversePatterns.reduce((result, { pattern, latin }) => {
         return result.replace(pattern, (match, before, after) => `${before}${latin}${after}`);
       }, normalized);
+    }
+
+    function parseCsvRows(csv) {
+      const rows = [];
+      let row = [];
+      let field = "";
+      let inQuotes = false;
+
+      for (let i = 0; i < csv.length; i++) {
+        const ch = csv[i];
+        const next = csv[i + 1];
+
+        if (ch === '"') {
+          if (inQuotes && next === '"') {
+            field += '"';
+            i++;
+          } else {
+            inQuotes = !inQuotes;
+          }
+          continue;
+        }
+
+        if (ch === "," && !inQuotes) {
+          row.push(field);
+          field = "";
+          continue;
+        }
+
+        if ((ch === "\n" || ch === "\r") && !inQuotes) {
+          if (ch === "\r" && next === "\n") i++;
+          row.push(field);
+          if (row.some(value => value.trim())) rows.push(row);
+          row = [];
+          field = "";
+          continue;
+        }
+
+        field += ch;
+      }
+
+      row.push(field);
+      if (row.some(value => value.trim())) rows.push(row);
+      return rows;
+    }
+
+    function buildCsvDictionary(csv) {
+      const rows = parseCsvRows(csv);
+      const map = new Map();
+      const [header = []] = rows;
+      const lowerHeader = header.map(column => column.trim().toLowerCase());
+      const wordIndex = lowerHeader.indexOf("word");
+      const nikkudIndex = lowerHeader.indexOf("nikkud");
+      const transliterationIndex = lowerHeader.indexOf("transliteration");
+
+      if (wordIndex === -1 || nikkudIndex === -1 || transliterationIndex === -1) {
+        throw new Error("CSV must include word, nikkud, and transliteration columns.");
+      }
+
+      for (const row of rows.slice(1)) {
+        const word = (row[wordIndex] || "").trim();
+        const nikkud = (row[nikkudIndex] || "").trim();
+        const transliteration = (row[transliterationIndex] || "").trim();
+        const hebrew = nikkud || word;
+
+        if (!hebrew || !transliteration) continue;
+        addPopularVariants(map, transliteration, hebrew);
+      }
+
+      return map;
+    }
+
+    function refreshDictionaryViews(sourceLabel = dictionarySourceLabel) {
+      dictionarySourceLabel = sourceLabel;
+      reverseDictionary = buildReverseDictionary();
+      reversePatterns = buildReversePatterns();
+      dictionaryCount.textContent = `${dictionarySourceLabel}: ${dictionary.size.toLocaleString()} Latin→Hebrew • ${reverseDictionary.size.toLocaleString()} Hebrew→Latin`;
+    }
+
+    function setCsvProgress(percent, message) {
+      csvLoadPanel.classList.remove("hidden");
+      csvProgressBar.style.width = `${Math.max(0, Math.min(100, percent))}%`;
+      csvLoadStatus.textContent = message;
+    }
+
+    async function loadCsvDictionary() {
+      loadCsvButton.disabled = true;
+      loadCsvButton.textContent = "Loading CSV...";
+      setCsvProgress(4, "Connecting to he_transliterations.csv...");
+
+      try {
+        const response = await fetch(CSV_DICTIONARY_URL);
+        if (!response.ok) throw new Error(`Download failed (${response.status})`);
+
+        const contentLength = Number(response.headers.get("content-length")) || 0;
+        let csv = "";
+
+        if (response.body?.getReader) {
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let received = 0;
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            received += value.length;
+            csv += decoder.decode(value, { stream: true });
+
+            if (contentLength) {
+              setCsvProgress(8 + (received / contentLength) * 72, `Downloading ${Math.round((received / contentLength) * 100)}%...`);
+            } else {
+              setCsvProgress(28, `Downloading ${(received / 1024).toFixed(0)} KB...`);
+            }
+          }
+
+          csv += decoder.decode();
+        } else {
+          csv = await response.text();
+        }
+
+        setCsvProgress(84, "Parsing transliterations...");
+        const csvDictionary = buildCsvDictionary(csv);
+        if (!csvDictionary.size) throw new Error("CSV did not contain usable entries.");
+
+        dictionary = csvDictionary;
+        refreshDictionaryViews("CSV");
+        setCsvProgress(100, `Loaded ${dictionary.size.toLocaleString()} CSV entries.`);
+        loadCsvButton.textContent = "CSV dictionary loaded";
+        convert();
+      } catch (error) {
+        setCsvProgress(100, `Could not load CSV: ${error.message}`);
+        loadCsvButton.textContent = "Retry CSV load";
+      } finally {
+        loadCsvButton.disabled = false;
+      }
     }
 
     function latinToHebrew(text, options = {}) {
@@ -1249,12 +1439,7 @@ eretz yisrael=ארץ ישראל`;
       };
 
       function normalizeWord(word) {
-        return word
-          .normalize("NFD")
-          .replace(/[\u0300-\u036f]/g, "")
-          .toLowerCase()
-          .replace(/[’ʼʾ]/g, "'")
-          .replace(/[‘ʿ`]/g, "`");
+        return normalizeLatinKey(word);
       }
 
       function isLatinLetter(ch) {
@@ -1598,6 +1783,11 @@ eretz yisrael=ארץ ישראל`;
         const normalizedWord = normalizeHebrewKey(rawWord);
         const hasVocalization = NIQQUD.test(rawWord);
         const overrideKey = rawWord.normalize("NFD").replace(/[\u0591-\u05AF\u05BD\u05BF\u05C0\u05C4-\u05C5]/g, "").normalize("NFC");
+        const vocalizedKey = rawWord.normalize("NFC").trim();
+
+        if (hasVocalization && vocalizedReverseDictionary.has(vocalizedKey)) {
+          return vocalizedReverseDictionary.get(vocalizedKey);
+        }
 
         if (QAMATS_QATAN_OVERRIDES.has(overrideKey)) {
           return QAMATS_QATAN_OVERRIDES.get(overrideKey);
@@ -1696,7 +1886,7 @@ eretz yisrael=ארץ ישראל`;
       copyStatus.textContent = "";
     }
 
-    dictionaryCount.textContent = `${dictionary.size.toLocaleString()} Latin→Hebrew • ${reverseDictionary.size.toLocaleString()} Hebrew→Latin`;
+    refreshDictionaryViews();
 
     input.addEventListener("input", convert);
     directionSelect.addEventListener("change", () => {
@@ -1707,6 +1897,7 @@ eretz yisrael=ארץ ישראל`;
     finalAAsHe.addEventListener("change", convert);
     showAyinAlef.addEventListener("change", convert);
     qForQof.addEventListener("change", convert);
+    loadCsvButton.addEventListener("click", loadCsvDictionary);
 
     copyButton.addEventListener("click", async () => {
       const text = output.textContent.trim();
