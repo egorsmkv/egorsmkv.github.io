@@ -163,8 +163,15 @@
               >
                 Copy phonemes
               </button>
+              <button
+                id="copyLatinizedButton"
+                type="button"
+                class="hidden rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-xs font-semibold text-white transition hover:bg-white/15 active:scale-[0.98]"
+              >
+                Copy Latinized
+              </button>
             </div>
-            <div class="grid gap-3 sm:grid-cols-2">
+            <div class="grid gap-3 xl:grid-cols-3">
               <div>
                 <p class="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Diacritics</p>
                 <pre id="phonikudDiacriticsOutput" dir="rtl" class="min-h-24 whitespace-pre-wrap rounded-2xl border border-white/10 bg-slate-950/70 p-4 text-right text-lg leading-relaxed text-slate-100"></pre>
@@ -172,6 +179,10 @@
               <div>
                 <p class="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Phonemes</p>
                 <pre id="phonikudPhonemesOutput" dir="ltr" class="min-h-24 whitespace-pre-wrap rounded-2xl border border-white/10 bg-slate-950/70 p-4 text-left text-lg leading-relaxed text-slate-100"></pre>
+              </div>
+              <div>
+                <p class="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Latinized</p>
+                <pre id="phonikudLatinizedOutput" dir="ltr" class="min-h-24 whitespace-pre-wrap rounded-2xl border border-white/10 bg-slate-950/70 p-4 text-left text-lg leading-relaxed text-slate-100"></pre>
               </div>
             </div>
           </div>
@@ -277,7 +288,9 @@
     const phonemizeStatus = document.getElementById("phonemizeStatus");
     const phonikudDiacriticsOutput = document.getElementById("phonikudDiacriticsOutput");
     const phonikudPhonemesOutput = document.getElementById("phonikudPhonemesOutput");
+    const phonikudLatinizedOutput = document.getElementById("phonikudLatinizedOutput");
     const copyPhonemesButton = document.getElementById("copyPhonemesButton");
+    const copyLatinizedButton = document.getElementById("copyLatinizedButton");
     const themeToggle = document.getElementById("themeToggle");
     const themeIcon = document.getElementById("themeIcon");
     const themeLabel = document.getElementById("themeLabel");
@@ -1438,6 +1451,78 @@ eretz yisrael=ארץ ישראל`;
       phonemizeStatus.textContent = message;
     }
 
+    function latinizeIpaPhonemes(value) {
+      const ipaWords = /[A-Za-z\u0250-\u02AF\u0370-\u03FF\u1D00-\u1D7F\u1D80-\u1DBF\u02C8\u02CC\u0361]+/gu;
+      const glottalMarker = "\uE000";
+
+      function latinizeWord(rawWord) {
+        let word = rawWord
+          .normalize("NFC")
+          .replaceAll("t͡s", "ts")
+          .replaceAll("d͡z", "dz")
+          .replaceAll("ˈ", "")
+          .replaceAll("ˌ", "")
+          .replaceAll("ʃ", "sh")
+          .replaceAll("ʒ", "zh")
+          .replaceAll("χ", "ch")
+          .replaceAll("ħ", "ch")
+          .replaceAll("x", "ch")
+          .replaceAll("ʁ", "r")
+          .replaceAll("ɾ", "r")
+          .replaceAll("ɡ", "g")
+          .replaceAll("j", "y")
+          .replaceAll("θ", "t")
+          .replaceAll("ð", "d")
+          .replaceAll("ŋ", "ng")
+          .replaceAll("ʕ", glottalMarker)
+          .replaceAll("ʔ", glottalMarker);
+
+        word = word
+          .replace(new RegExp(`^${glottalMarker}+`, "g"), "")
+          .replace(new RegExp(`sh${glottalMarker}(?=[aeiou])`, "gi"), "sh'")
+          .replace(new RegExp(`([bcdfgklmnpqrstvwxyz])${glottalMarker}(?=[aeiou])`, "gi"), "$1'")
+          .replace(new RegExp(`e${glottalMarker}o`, "gi"), "e'o")
+          .replace(new RegExp(`${glottalMarker}`, "g"), "");
+
+        const wordFixes = {
+          bevanot: "bebanot",
+          beveyit: "bebayit",
+          haarets: "haaretz",
+          siyot: "achayot",
+          fizyoterpistiyot: "fizioterapistiyot",
+          meguvunim: "meguvanim",
+          haykara: "hayekara"
+        };
+
+        if (wordFixes[word]) return wordFixes[word];
+
+        return word
+          .replace(/andsot$/i, "andesot")
+          .replace(/zyo/i, "zio")
+          .replace(/ey$/i, "ei")
+          .replace(/ets$/i, "etz");
+      }
+
+      function sentenceCase(text) {
+        let shouldCapitalize = true;
+
+        return text.replace(/([A-Za-z])|([.!?]\s*)/g, (match, letter, boundary) => {
+          if (boundary) {
+            shouldCapitalize = true;
+            return boundary;
+          }
+
+          if (!letter) return match;
+          if (!shouldCapitalize) return letter;
+
+          shouldCapitalize = false;
+          return letter.toUpperCase();
+        });
+      }
+
+      return sentenceCase(value.replace(ipaWords, latinizeWord));
+    }
+
     async function phonemizeCurrentHebrew() {
       const serverUrl = normalizeServerUrl(phonikudServerInput.value);
       const hebrewText = currentHebrewText();
@@ -1453,8 +1538,10 @@ eretz yisrael=ארץ ישראל`;
       phonemizeButton.disabled = true;
       phonemizeButton.textContent = "Phonemizing...";
       copyPhonemesButton.classList.add("hidden");
+      copyLatinizedButton.classList.add("hidden");
       phonikudDiacriticsOutput.textContent = "";
       phonikudPhonemesOutput.textContent = "";
+      phonikudLatinizedOutput.textContent = "";
       setPhonemizeStatus("Sending Hebrew text to Phonikud...");
 
       try {
@@ -1470,9 +1557,13 @@ eretz yisrael=ארץ ישראל`;
         if (!response.ok) throw new Error(`Server returned ${response.status}`);
 
         const result = await response.json();
+        const phonemes = result.phonemes || "";
+        const latinized = latinizeIpaPhonemes(phonemes);
         phonikudDiacriticsOutput.textContent = result.diacritics || "";
-        phonikudPhonemesOutput.textContent = result.phonemes || "";
-        copyPhonemesButton.classList.toggle("hidden", !result.phonemes);
+        phonikudPhonemesOutput.textContent = phonemes;
+        phonikudLatinizedOutput.textContent = latinized;
+        copyPhonemesButton.classList.toggle("hidden", !phonemes);
+        copyLatinizedButton.classList.toggle("hidden", !latinized);
         setPhonemizeStatus("Phonemized.");
       } catch (error) {
         setPhonemizeStatus(`Phonemization failed: ${error.message}`);
@@ -2028,6 +2119,21 @@ eretz yisrael=ארץ ישראל`;
         setPhonemizeStatus("Phonemes copied.");
       } catch {
         setPhonemizeStatus("Copy failed. Select the phonemes manually.");
+      }
+    });
+    copyLatinizedButton.addEventListener("click", async () => {
+      const text = phonikudLatinizedOutput.textContent.trim();
+
+      if (!text) {
+        setPhonemizeStatus("No Latinized text to copy.");
+        return;
+      }
+
+      try {
+        await navigator.clipboard.writeText(text);
+        setPhonemizeStatus("Latinized text copied.");
+      } catch {
+        setPhonemizeStatus("Copy failed. Select the Latinized text manually.");
       }
     });
 
