@@ -171,7 +171,7 @@
             <strong class="font-semibold">Note:</strong>
             This uses a 5,000-entry override dictionary plus fallback rules in both directions. Transliteration is ambiguous: unvocalized Hebrew usually omits vowels, and Latin spellings like
             <span class="font-semibold">kh</span>, <span class="font-semibold">t</span>, and
-            <span class="font-semibold">v</span> can map to more than one Hebrew spelling.
+            <span class="font-semibold">v</span> can map to more than one Hebrew spelling. Hebrew vowel marks are used when present.
           </div>
 
           <div class="mt-5 grid grid-cols-2 gap-2 text-sm text-slate-300 sm:grid-cols-3">
@@ -181,6 +181,7 @@
             <button class="sample rounded-xl bg-white/10 px-3 py-2 text-left hover:bg-white/15" data-latin="torah" data-hebrew="תורה">torah</button>
             <button class="sample rounded-xl bg-white/10 px-3 py-2 text-left hover:bg-white/15" data-latin="khaverim" data-hebrew="חברים">khaverim</button>
             <button class="sample rounded-xl bg-white/10 px-3 py-2 text-left hover:bg-white/15" data-latin="ani ohev ivrit" data-hebrew="אני אוהב עברית">ani ohev ivrit</button>
+            <button class="sample rounded-xl bg-white/10 px-3 py-2 text-left hover:bg-white/15" data-latin="neqdimon" data-hebrew="נְקְדִּימוֹן">neqdimon</button>
           </div>
         </aside>
       </div>
@@ -1406,6 +1407,8 @@ eretz yisrael=ארץ ישראל`;
       const DAGESH = "\u05BC";
       const SHIN_DOT = "\u05C1";
       const SIN_DOT = "\u05C2";
+      const SHEVA = "\u05B0";
+      const HIRIQ = "\u05B4";
 
       function splitClusters(word) {
         const chars = Array.from(word.normalize("NFD"));
@@ -1433,20 +1436,25 @@ eretz yisrael=ארץ ישראל`;
         return cluster.includes(mark);
       }
 
-      function vowelFor(cluster) {
+      function vowelFor(cluster, index = 0) {
+        if (cluster.includes(SHEVA)) return index === 0 ? "e" : "";
         if (cluster.includes("\u05B7") || cluster.includes("\u05B8") || cluster.includes("\u05B2")) return "a";
         if (cluster.includes("\u05B6") || cluster.includes("\u05B5") || cluster.includes("\u05B1")) return "e";
-        if (cluster.includes("\u05B4")) return "i";
+        if (cluster.includes(HIRIQ)) return "i";
         if (cluster.includes("\u05B9") || cluster.includes("\u05BA") || cluster.includes("\u05B3")) return "o";
         if (cluster.includes("\u05BB")) return "u";
         return "";
       }
 
-      function mapPlainCluster(cluster) {
+      function hasVowelMark(cluster) {
+        return /[\u05B0-\u05BB\u05C7]/u.test(cluster);
+      }
+
+      function mapPlainCluster(cluster, index = 0) {
         const base = baseOf(cluster);
         const hasDagesh = hasMark(cluster, DAGESH);
         const hasSinDot = hasMark(cluster, SIN_DOT);
-        const vowel = vowelFor(cluster);
+        const vowel = vowelFor(cluster, index);
 
         if (base === "ו" && (hasDagesh || vowel === "u")) return "u";
         if (base === "ו" && vowel === "o") return "o";
@@ -1500,7 +1508,8 @@ eretz yisrael=ארץ ישראל`;
 
       function transliterateHebrewWord(rawWord) {
         const normalizedWord = normalizeHebrewKey(rawWord);
-        if (reverseDictionary.has(normalizedWord)) {
+        const hasVocalization = NIQQUD.test(rawWord);
+        if (!hasVocalization && reverseDictionary.has(normalizedWord)) {
           return reverseDictionary.get(normalizedWord);
         }
 
@@ -1511,6 +1520,7 @@ eretz yisrael=ארץ ישראל`;
           const cluster = clusters[i];
           const base = baseOf(cluster);
           const nextBase = baseOf(clusters[i + 1] || "");
+          const previousCluster = clusters[i - 1] || "";
 
           if (base === "׳" || base === "'") continue;
 
@@ -1520,13 +1530,17 @@ eretz yisrael=ארץ ישראל`;
             continue;
           }
 
-          out += mapPlainCluster(cluster);
+          if (base === "י" && !hasVowelMark(cluster) && hasMark(previousCluster, HIRIQ)) {
+            continue;
+          }
+
+          out += mapPlainCluster(cluster, i);
         }
 
         return out;
       }
 
-      const dictionaryExpandedText = applyReverseDictionary(text);
+      const dictionaryExpandedText = NIQQUD.test(text) ? text : applyReverseDictionary(text);
 
       return dictionaryExpandedText
         .match(/[\u0590-\u05FF]+|[^\u0590-\u05FF]+/gu)
